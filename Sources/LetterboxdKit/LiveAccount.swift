@@ -76,31 +76,54 @@ public typealias HomepageFetcher = @Sendable (Session) async throws -> (status: 
 /// Writes are unverified and unsupported.
 public final class LiveAccountService: AccountService, @unchecked Sendable {
     let store: SessionStore
+    let fence = AuthFence()
     public init(store: SessionStore) { self.store = store }
     public func signIn(email: String, password: String) async throws -> Session { throw AuthError.verificationRequired }
 
-    public func complete(cookies: [WebCookie], fetch: HomepageFetcher, now: Date = Date(), isCurrent: @Sendable () -> Bool = { true }) async throws -> Session {
+    public func complete(cookies: [WebCookie], fetch: HomepageFetcher, now: Date = Date(), token: Int? = nil) async throws -> Session {
         guard let jar = SessionCookies.accept(cookies, now: now, storedAt: now) else { throw AuthError.notSignedIn }
         let r = try await fetch(Session(username: "", cookies: jar, storedAt: now))
         guard r.status == 200, let name = IdentityCheck.username(fromHomepage: r.html) else { throw AuthError.notSignedIn }
-        guard isCurrent() else { throw AuthError.notSignedIn }   // logout/new login happened while validating: persist nothing
         let s = Session(username: name, cookies: jar, storedAt: now)
-        try store.save(s); return s
+        // Atomic with logout: the fence lock is held while saving, so a logout cannot interleave and an obsolete token persists nothing.
+        guard try commit(token, { try store.save(s) }) else { throw AuthError.notSignedIn }
+        return s
     }
     /// Launch-time restore: re-validates stored cookie attributes and re-confirms identity with the server.
     /// Invalid, expired or mismatched sessions are removed. A network failure keeps the stored session untouched.
-    public func restore(fetch: HomepageFetcher, now: Date = Date(), isCurrent: @Sendable () -> Bool = { true }) async throws -> Session? {
-        guard let s = try? store.load() else { try store.clear(); return nil }
-        guard let jar = SessionCookies.accept(s.cookies, now: now, storedAt: s.storedAt) else { try store.clear(); return nil }
+    public func restore(fetch: HomepageFetcher, now: Date = Date(), token: Int? = nil) async throws -> Session? {
+        guard let s = try? store.load() else { _ = try commit(token, { try store.clear() }); return nil }
+        guard let jar = SessionCookies.accept(s.cookies, now: now, storedAt: s.storedAt) else { _ = try commit(token, { try store.clear() }); return nil }
         let r = try await fetch(Session(username: s.username, cookies: jar, storedAt: s.storedAt))
-        guard isCurrent() else { return nil }   // obsolete: neither clear nor return a session
         guard r.status == 200, let name = IdentityCheck.username(fromHomepage: r.html), name.lowercased() == s.username.lowercased() else {
-            try store.clear(); return nil
+            _ = try commit(token, { try store.clear() }); return nil
         }
+        guard fence.isCurrent(token) else { return nil }
         return Session(username: name, cookies: jar, storedAt: s.storedAt)
     }
-    public func signOut() async throws { try store.clear() }
+    /// Starts a restore/complete operation; any later begin/invalidate makes this token obsolete.
+    public func beginOperation() -> Int { fence.begin() }
+    /// Synchronously obsoletes every pending operation (call before any await on logout).
+    public func invalidatePending() { fence.invalidate() }
+    public func isCurrent(_ t: Int) -> Bool { fence.isCurrent(t) }
+    public func signOut() async throws { fence.invalidate(); try fence.performAlways { try store.clear() } }
+    private func commit(_ t: Int?, _ body: () throws -> Void) throws -> Bool {
+        guard let t else { try body(); return true }
+        return try fence.perform(t, body) != nil
+    }
     public func setWatchlist(slug: String, on: Bool) async throws { throw AuthError.unsupported("Watchlist writes are not verified.") }
     public func createList(name: String, isPrivate: Bool) async throws -> URL { throw AuthError.unsupported("List writes are not verified.") }
     public func deleteList(_ url: URL) async throws { throw AuthError.unsupported("List writes are not verified.") }
+}
+
+/// Serializes session persistence with logout. perform() holds the lock while writing, so a stale token can never persist
+/// and a logout (invalidate + clear) is totally ordered against any save.
+public final class AuthFence: @unchecked Sendable {
+    private let lock = NSLock(); private var epoch = 0
+    public init() {}
+    public func begin() -> Int { lock.lock(); defer { lock.unlock() }; epoch += 1; return epoch }
+    public func invalidate() { lock.lock(); epoch += 1; lock.unlock() }
+    public func isCurrent(_ t: Int?) -> Bool { lock.lock(); defer { lock.unlock() }; return t == nil || t == epoch }
+    public func perform(_ t: Int, _ body: () throws -> Void) rethrows -> Void? { lock.lock(); defer { lock.unlock() }; guard t == epoch else { return nil }; try body(); return () }
+    public func performAlways(_ body: () throws -> Void) rethrows { lock.lock(); defer { lock.unlock() }; try body() }
 }

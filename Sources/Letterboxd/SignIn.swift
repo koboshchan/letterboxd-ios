@@ -13,8 +13,6 @@ final class AccountModel {
     var validating = true
     /// Bumped on every auth state change; the root view is rebuilt on it so no model keeps previous-account data.
     private(set) var epoch = 0
-    /// Operation token: bumped by sign-out and each new restore/complete; an older pending operation may not install or persist anything.
-    private var op = 0
     /// Set by the app before restore(); the only holder of credentials used for requests.
     var auth: AuthAuthority?
     /// The web view's data store. Owned here so sign-out clears the store actually used.
@@ -26,29 +24,27 @@ final class AccountModel {
     func restore() async {
         defer { validating = false }
         let before = username
-        op += 1; let my = op
+        let my = service.beginOperation()
         do {
-            let cur: @Sendable () -> Bool = { [weak self] in MainActor.assumeIsolated { self?.op == my } }
-            let r = try await service.restore(fetch: Self.fetchHomepage, isCurrent: cur)
-            guard op == my else { return }
+            let r = try await service.restore(fetch: Self.fetchHomepage, token: my)
+            guard service.isCurrent(my) else { return }
             if let s = r { auth?.setValidated(s); username = s.username }
             else { auth?.revoke(); username = nil }
-        } catch { guard op == my else { return }; auth?.revoke(); username = nil }  // unverifiable (e.g. offline): no credentials sent until validated
+        } catch { guard service.isCurrent(my) else { return }; auth?.revoke(); username = nil }  // unverifiable (e.g. offline): no credentials sent until validated
         if username != before { epoch += 1 }   // rebuild views only on a real account change
     }
     func complete(with cookies: [HTTPCookie]) async -> Bool {
         let mapped = cookies.map { WebCookie(name: $0.name, value: $0.value, domain: $0.domain, path: $0.path, expires: $0.expiresDate, secure: $0.isSecure) }
-        op += 1; let my = op
+        let my = service.beginOperation()
         do {
-            let cur: @Sendable () -> Bool = { [weak self] in MainActor.assumeIsolated { self?.op == my } }
-            let s = try await service.complete(cookies: mapped, fetch: Self.fetchHomepage, isCurrent: cur)
-            guard op == my else { return false }
+            let s = try await service.complete(cookies: mapped, fetch: Self.fetchHomepage, token: my)
+            guard service.isCurrent(my) else { return false }
             auth?.setValidated(s); username = s.username; failure = nil; epoch += 1; return true
         } catch { failure = "Letterboxd did not confirm a signed-in account yet. Finish signing in on the page, then tap Done."; return false }
     }
     /// Removes the Keychain session and any web data left for the site.
     func signOut() async {
-        op += 1   // invalidates every pending restore/complete
+        service.invalidatePending()   // invalidates every pending restore/complete (before any await)
         auth?.revoke()   // first: stops credentials immediately and invalidates in-flight responses
         username = nil; epoch += 1
         do { try await service.signOut() } catch { failure = "Could not remove the stored session." }

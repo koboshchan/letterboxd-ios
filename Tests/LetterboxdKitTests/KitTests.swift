@@ -394,14 +394,62 @@ final class AccountRaceTests: XCTestCase {
         do { _ = try await f.text(u); XCTFail() } catch {}
         let c = await f.cache.get(u, partition: 0); XCTAssertNil(c)
     }
+    nonisolated static let page = "<script>person = { username: \"uu\", loggedIn: false }</script><script>person.username = \"uu\"; person.loggedIn = true;</script>"
+    nonisolated static let cookie = WebCookie(name: "letterboxd.user.CURRENT", value: "v", domain: "letterboxd.com")
     func testLateCompleteAfterLogoutPersistsNothing() async throws {
         let st = InMemorySessionStore(); let svc = LiveAccountService(store: st); let gate = Gate()
-        let flag = FlagBox()
-        let c = WebCookie(name: "letterboxd.user.CURRENT", value: "v", domain: "letterboxd.com", expires: Date().addingTimeInterval(9999))
-        let t = Task { try await svc.complete(cookies: [c], fetch: { _ in await gate.wait(); return (200, "<script>person = { username: \"u\", loggedIn: false }</script><script>person.username = \"u\"; person.loggedIn = true;</script>") }, isCurrent: { flag.on }) }
-        flag.on = false; await gate.release()
+        let tok = svc.beginOperation()
+        let t = Task { try await svc.complete(cookies: [AccountRaceTests.cookie], fetch: { _ in await gate.wait(); return (200, AccountRaceTests.page) }, token: tok) }
+        svc.invalidatePending(); try await svc.signOut(); await gate.release()
         do { _ = try await t.value; XCTFail("must refuse") } catch {}
         XCTAssertNil(try st.load())
     }
+    func testCompleteSanity() async throws {
+        let st = InMemorySessionStore(); let svc = LiveAccountService(store: st)
+        let s = try await svc.complete(cookies: [AccountRaceTests.cookie], fetch: { _ in (200, AccountRaceTests.page) }, token: svc.beginOperation())
+        XCTAssertEqual(s.username, "uu")
+    }
+    func testLogoutDuringSaveWaitsThenClears() async throws {
+        let st = BlockingStore(); let svc = LiveAccountService(store: st)
+        let tok = svc.beginOperation()
+        let t = Task.detached { try await svc.complete(cookies: [AccountRaceTests.cookie], fetch: { _ in (200, AccountRaceTests.page) }, token: tok) }
+        var spins = 0
+        while !st.saving { spins += 1; if spins > 1500 { XCTFail("save never entered: \(String(describing: try? await t.value))"); return }; try await Task.sleep(nanoseconds: 2_000_000) }   // suspended INSIDE save
+        let out = Task.detached { try await svc.signOut() }
+        try await Task.sleep(nanoseconds: 100_000_000)
+        XCTAssertFalse(st.cleared, "logout must wait for the in-progress save")
+        st.release.signal()
+        _ = try? await t.value; try await out.value
+        XCTAssertTrue(st.cleared); XCTAssertNil(try st.load(), "store empty after logout")
+    }
+    func testRestoreAfterLogoutDoesNotReinstallOrClear() async throws {
+        let st = InMemorySessionStore(); try st.save(Session(username: "uu", cookies: [AccountRaceTests.cookie], storedAt: Date()))
+        let svc = LiveAccountService(store: st); let gate = Gate(); let tok = svc.beginOperation()
+        let t = Task { try await svc.restore(fetch: { _ in await gate.wait(); return (200, AccountRaceTests.page) }, token: tok) }
+        svc.invalidatePending(); await gate.release()
+        let r = try await t.value; XCTAssertNil(r)
+    }
+    func testGenerationChangeDuringCacheGetNeverReturnsStale() async throws {
+        let auth = AuthAuthority(); let u = URL(string: "https://letterboxd.com/p/")!; let cache = ResponseCache()
+        await cache.set(u, Data("A".utf8), partition: auth.generation)
+        await cache.installHooks(get: { auth.revoke(); auth.setValidated(Session(username: "bb", cookies: [AccountRaceTests.cookie])) }, set: nil)
+        let f = Fetcher(transport: StubTransport { _ in HTTPResult(data: Data("net".utf8), status: 200) }, cache: cache, auth: auth)
+        do { _ = try await f.text(u); XCTFail("stale cache hit returned") } catch LetterboxdError.cancelled {}
+    }
+    func testGenerationChangeDuringCacheSetNeverReturnsStale() async throws {
+        let auth = AuthAuthority(); let u = URL(string: "https://letterboxd.com/q/")!; let cache = ResponseCache()
+        await cache.installHooks(get: nil, set: { auth.setValidated(Session(username: "bb", cookies: [AccountRaceTests.cookie])) })
+        let f = Fetcher(transport: StubTransport { _ in HTTPResult(data: Data("net".utf8), status: 200) }, cache: cache, auth: auth)
+        do { _ = try await f.text(u); XCTFail("stale network result returned") } catch LetterboxdError.cancelled {}
+    }
 }
-final class FlagBox: @unchecked Sendable { var on = true }
+final class BlockingStore: SessionStore, @unchecked Sendable {
+    var saving: Bool { lock.lock(); defer { lock.unlock() }; return _saving }
+    private var _saving = false
+    let release = DispatchSemaphore(value: 0)
+    private let lock = NSLock(); private var s: Session?; private var _cleared = false
+    var cleared: Bool { lock.lock(); defer { lock.unlock() }; return _cleared }
+    func load() throws -> Session? { lock.lock(); defer { lock.unlock() }; return s }
+    func save(_ x: Session) throws { lock.lock(); _saving = true; lock.unlock(); release.wait(); lock.lock(); s = x; lock.unlock() }
+    func clear() throws { lock.lock(); s = nil; _cleared = true; lock.unlock() }
+}

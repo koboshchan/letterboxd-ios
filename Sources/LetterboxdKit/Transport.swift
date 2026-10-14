@@ -88,13 +88,16 @@ public actor ResponseCache {
     private var store: [Key: Entry] = [:]
     private let ttl: TimeInterval
     private let now: @Sendable () -> Date
+    /// Test seams: run inside the actor just before get/set return, i.e. in the window where Fetcher is suspended.
+    var afterGet: (@Sendable () -> Void)?; var afterSet: (@Sendable () -> Void)?
+    func installHooks(get: (@Sendable () -> Void)?, set: (@Sendable () -> Void)?) { afterGet = get; afterSet = set }
     public init(ttl: TimeInterval = 300, now: @escaping @Sendable () -> Date = { Date() }) { self.ttl = ttl; self.now = now }
     public func get(_ u: URL, partition: Int = 0) -> Data? {
         let k = Key(url: u, partition: partition)
         guard let e = store[k], now().timeIntervalSince(e.at) < ttl else { store[k] = nil; return nil }
-        return e.data
+        afterGet?(); return e.data
     }
-    public func set(_ u: URL, _ d: Data, partition: Int = 0) { store[Key(url: u, partition: partition)] = Entry(data: d, at: now()) }
+    public func set(_ u: URL, _ d: Data, partition: Int = 0) { store[Key(url: u, partition: partition)] = Entry(data: d, at: now()); afterSet?() }
     public func clear() { store.removeAll() }
 }
 
