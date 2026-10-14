@@ -119,6 +119,16 @@ final class KitTests: XCTestCase {
 }
 final class RecordedTests: XCTestCase {
     func rec(_ n: String) throws -> Data { try Data(contentsOf: Bundle.module.url(forResource: n, withExtension: "json", subdirectory: "Fixtures/recorded")!) }
+    func html(_ n: String) throws -> String { String(decoding: try Data(contentsOf: Bundle.module.url(forResource: "real-" + n, withExtension: "html", subdirectory: "Fixtures/recorded")!), as: UTF8.self) }
+    /// The sanitizer stripped data-* attributes, so recorded grids carry no slugs. Verifies parse safety only.
+    func testRealPopularFixtureLacksDataAttributesButParses() throws {
+        let p = try Parsers.filmGrid(html: try html("popular"), page: 1); XCTAssertTrue(p.items.isEmpty)
+    }
+    func testRealProfile() throws { let p = try Parsers.profile(html: try html("profile"), username: "example-member"); XCTAssertFalse(p.displayName.isEmpty) }
+    func testRealListsAndSearchParse() throws {
+        _ = try Parsers.lists(html: try html("lists"), page: 1)
+        _ = try Parsers.filmGrid(html: try html("search"), page: 1)
+    }
     func testFilmJSON() throws {
         let f = try FilmJSON.decode(try rec("film-detail"))
         XCTAssertEqual(f.slug, "fight-club"); XCTAssertEqual(f.releaseYear, 1999); XCTAssertEqual(f.directors.first?.name, "David Fincher")
