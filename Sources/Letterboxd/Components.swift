@@ -21,17 +21,22 @@ struct PosterView: View {
     @Environment(AppEnvironment.self) private var env
     let film: FilmSummary
     @State private var resolved: URL?
+    private var titleCard: some View {
+        VStack(spacing: 4) {
+            Text(film.title).font(.caption.weight(.semibold)).multilineTextAlignment(.center).lineLimit(4)
+            if let y = film.year { Text(String(y)).font(.caption2).foregroundStyle(.secondary) }
+        }.padding(8)
+    }
     var body: some View {
         Theme.card
             .aspectRatio(2.0/3.0, contentMode: .fit)
             .overlay {
                 if let u = film.posterURL ?? resolved {
-                    AsyncImage(url: u) { img in img.resizable().scaledToFill() } placeholder: { Color(white: 0.12) }
+                    AsyncImage(url: u) { phase in
+                        if let img = phase.image { img.resizable().scaledToFill() } else { titleCard }
+                    }
                 } else {
-                    VStack(spacing: 4) {
-                        Text(film.title).font(.caption.weight(.semibold)).multilineTextAlignment(.center).lineLimit(4)
-                        if let y = film.year { Text(String(y)).font(.caption2).foregroundStyle(.secondary) }
-                    }.padding(8)
+                    titleCard
                 }
             }
         .clipShape(RoundedRectangle(cornerRadius: 6))

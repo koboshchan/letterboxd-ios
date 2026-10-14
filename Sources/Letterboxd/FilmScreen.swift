@@ -49,7 +49,7 @@ struct AboutScreen: View {
     @Environment(AppEnvironment.self) private var env
     var body: some View {
         ScrollViewReader { proxy in List {
-            Section("Read-only") { Text("Browsing uses public pages only. You can sign in on letterboxd.com itself (the app never sees your password), but sign-in is not yet verified end to end, and posting, rating, watchlist and list changes are not supported.") }
+            Section("Read-only") { Text("Browsing uses public pages only. You can sign in on letterboxd.com itself (the app does not intercept or store your password), but sign-in is not yet verified end to end, and posting, rating, watchlist and list changes are not supported.") }
             Section("Data source") {
                 Text("Letterboxd's official API is approval-only and is not being granted for personal projects, so this app does not use it and is not an official client.")
                 Text("Diary and reviews come from each member's public RSS feed. Films, watchlist, lists and search use public web pages, fetched only when you open or refresh a screen, cached for five minutes. Challenges or blocks are never bypassed; when Letterboxd declines a request you'll see an error and a link to the website.")

@@ -521,6 +521,7 @@ final class LoopbackServer: @unchecked Sendable {
     func stop() { listener.cancel() }
     init() throws {
         let params = NWParameters.tcp
+        params.requiredLocalEndpoint = NWEndpoint.hostPort(host: .ipv4(.loopback), port: .any)
         let ls = try NWListener(using: params, on: .any)
         listener = ls
         let ready = DispatchSemaphore(value: 0)

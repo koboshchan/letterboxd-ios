@@ -78,7 +78,11 @@ public final class PublicWebService: LetterboxdService {
         return try Parsers.members(html: try await fetcher.text(url(["s", "search", "members", q], page: page)), page: page)
     }
     public func poster(for slug: String) async -> URL? {
-        guard let s = try? Validate.slug(slug), let h = try? await fetcher.text(url(["film", s])) else { return nil }
+        guard let s = try? Validate.slug(slug) else { return nil }
+        // Grid posters are lazy: the site serves them from a small JSON endpoint (observed in the saved-profile capture).
+        if let j = try? await fetcher.text(url(["film", s, "poster", "std", "230"]), accept: "application/json"),
+           let p = try? PosterJSON.decode(Data(j.utf8)) { return p.url2x }
+        guard let h = try? await fetcher.text(url(["film", s])) else { return nil }
         return Parsers.ogImage(html: h)
     }
     static func cleanQuery(_ q: String) throws -> String {

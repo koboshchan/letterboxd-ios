@@ -32,8 +32,12 @@ final class PagedLoader<Item: Identifiable & Sendable> where Item.ID: Sendable {
     private func run(page p: Int, refresh: Bool, replace: Bool) async {
         do {
             let r = try await fetch(p, refresh)
-            if replace { items = r.items } else { items += r.items.filter { n in !items.contains { $0.id == n.id } } }
-            page = p; hasNext = r.hasNext; phase = .loaded(())
+            var progressed = true
+            if replace { items = r.items } else {
+                let fresh = r.items.filter { n in !items.contains { $0.id == n.id } }
+                progressed = !fresh.isEmpty; items += fresh
+            }
+            page = p; hasNext = r.hasNext && progressed; phase = .loaded(())
         } catch is CancellationError { phase = replace && items.isEmpty ? .idle : .loaded(())
         } catch let e as LetterboxdError {
             if e == .cancelled { phase = items.isEmpty ? .idle : .loaded(()) } else { phase = .failed(e) }
