@@ -144,7 +144,7 @@ final class EntryReviewTests: XCTestCase {
     }
     func testReviewPageValidation() throws {
         XCTAssertEqual(try Validate.reviewPage(URL(string: "https://letterboxd.com/uu/film/your-name/")!).absoluteString, "https://letterboxd.com/uu/film/your-name/")
-        XCTAssertEqual(try Validate.reviewPage(URL(string: "https://letterboxd.com/uu/film/your-name/2/")!).path, "/uu/film/your-name/2/")
+        XCTAssertEqual(try Validate.reviewPage(URL(string: "https://letterboxd.com/uu/film/your-name/2/")!).absoluteString, "https://letterboxd.com/uu/film/your-name/2/")
         for bad in ["http://letterboxd.com/uu/film/a/", "https://evil.com/u/film/a/", "https://letterboxd.com/uu/film/a/?x=1", "https://letterboxd.com/uu/film/a/x/", "https://letterboxd.com/u/list/a/", "https://letterboxd.com:8443/u/film/a/", "https://a@letterboxd.com/u/film/a/"] {
             XCTAssertThrowsError(try Validate.reviewPage(URL(string: bad)!), bad)
         }
