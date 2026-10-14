@@ -11,7 +11,7 @@ struct LetterboxdApp: App {
                 .environment(env)
                 .environment(account)
                 .tint(Theme.green)
-                .task { account.auth = env.auth; account.onUsernameChange = { [env] u in env.username = u ?? "" }; await account.restore() }
+                .task { account.auth = env.auth; account.onUsernameChange = { [env] u in env.bind(username: u) }; await account.restore() }
         }
     }
 }
@@ -31,7 +31,9 @@ final class AppEnvironment {
     let service: LetterboxdService
     let auth: AuthAuthority
     /// Member being viewed; set only from a server-validated session (empty while signed out, never shown then).
-    var username = ""
+    private(set) var username = ""
+    /// The only writer: bound to the validated session (see AccountModel.onUsernameChange). No manual override exists.
+    func bind(username u: String?) { username = u ?? "" }
     /// Launch-argument hooks for deterministic screenshots, compiled into DEBUG builds only. They only pick a tab/segment
     /// inside the authenticated UI and cannot bypass the sign-in gate.
     static func arg(_ k: String) -> String? {

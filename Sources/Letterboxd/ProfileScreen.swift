@@ -13,8 +13,6 @@ struct ProfileScreen: View {
     @State private var diary: ValueLoader<[ActivityEntry]>?
     @State private var reviews: ValueLoader<[ActivityEntry]>?
     @State private var lists: PagedLoader<ListSummary>?
-    @State private var editing = false
-    @State private var draft = ""
 
     var body: some View {
         let u = env.username
@@ -25,12 +23,6 @@ struct ProfileScreen: View {
             content
         }
         .navigationTitle(u).navigationBarTitleDisplayMode(.inline)
-        .toolbar { ToolbarItem(placement: .topBarTrailing) { Button { draft = u; editing = true } label: { Image(systemName: "person.crop.circle.badge.questionmark") }.accessibilityLabel("Change member") } }
-        .alert("View another public member", isPresented: $editing) {
-            TextField("username", text: $draft).textInputAutocapitalization(.never).autocorrectionDisabled()
-            Button("Show") { if let v = try? Validate.username(draft) { env.username = v; reset() } }
-            Button("Cancel", role: .cancel) {}
-        }
         .onAppear { if profile == nil { reset() } }
         .onChange(of: env.username) { _, _ in reset() }
         .navigationDestination(for: ActivityEntry.self) { EntryScreen(entry: $0) }
