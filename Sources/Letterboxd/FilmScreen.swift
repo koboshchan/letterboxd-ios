@@ -25,8 +25,14 @@ struct FilmScreen: View {
                 if let d = loader?.value {
                     if let t = d.tagline { Text(t.uppercased()).font(.caption.weight(.semibold)).foregroundStyle(.secondary).tracking(1) }
                     if let s = d.synopsis { Text(s).font(.body).lineSpacing(3) }
-                    if !d.directors.isEmpty { section("Directed by", d.directors.map(\.name)) }
-                    if !d.cast.isEmpty { section("Cast", d.cast.prefix(12).map(\.name)) }
+                    if d.credits.isEmpty {
+                        if !d.directors.isEmpty { section("Directed by", d.directors.map(\.name)) }
+                        if !d.cast.isEmpty { section("Cast", d.cast.prefix(12).map(\.name)) }
+                    } else {
+                        CreditSection(title: "Directed by", credits: d.credits.filter { $0.role == .director })
+                        CreditSection(title: "Cast", credits: Array(d.credits.filter { $0.role == .actor }.prefix(24)))
+                        CreditSection(title: "Crew", credits: d.credits.filter { $0.role != .director && $0.role != .actor })
+                    }
                 } else if let e = loader?.error {
                     ErrorCard(error: e, retry: { Task { await loader?.load(refresh: true) } }, link: summary.pageURL)
                 } else { ProgressView().frame(maxWidth: .infinity).padding() }
@@ -47,6 +53,7 @@ struct FilmScreen: View {
             }
         }
         .toolbarBackground(.hidden, for: .navigationBar)
+        .navigationDestination(for: Credit.self) { PersonScreen(credit: $0) }
         .task {
             let s = env.service, slug = summary.slug
             if loader == nil { loader = ValueLoader { r in try await s.film(slug: slug, refresh: r) } }
