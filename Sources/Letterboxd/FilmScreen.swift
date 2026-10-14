@@ -40,7 +40,6 @@ struct FilmScreen: View {
                 } else if let e = loader?.error {
                     ErrorCard(error: e, retry: { Task { await loader?.load(refresh: true) } }, link: summary.pageURL)
                 } else { ProgressView().frame(maxWidth: .infinity).padding() }
-                UnverifiedWriteRows(features: [.logDiary, .rate, .review, .addToList])
                 NavigationLink { FilmReviewsScreen(film: summary).hidesBottomNav() } label: { Label("Reviews", systemImage: "text.bubble") }.buttonStyle(.bordered)
                 NavigationLink { FilmListsScreen(film: summary).hidesBottomNav() } label: { Label("Lists featuring this film", systemImage: "list.bullet.rectangle") }.buttonStyle(.bordered)
             }.padding(20)

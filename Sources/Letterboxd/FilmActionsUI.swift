@@ -90,20 +90,6 @@ struct FilmActionBar: View {
     }
 }
 
-/// Writes whose request format was never captured. Shown, disabled, with the reason. They send nothing.
-struct UnverifiedWriteRows: View {
-    let features: [WriteFeature]
-    var body: some View {
-        let items = features.filter { if case .unverified = $0.status { true } else { false } }
-        VStack(alignment: .leading, spacing: 6) {
-            ForEach(items, id: \.self) { f in
-                Label(f.title, systemImage: f.symbol).foregroundStyle(.secondary)
-                    .accessibilityIdentifier("unverified-\(f.rawValue)").accessibilityHint("Not available yet")
-            }
-            if !items.isEmpty, case .unverified(let r) = items[0].status { Text(r).font(.footnote).foregroundStyle(.secondary) }
-        }
-    }
-}
 
 /// Long-press menu shared by every poster (profile, browse, lists, person grids): Open film, Add/Remove Watchlist, Like/Unlike.
 /// Only the two verified writes are offered; rating and watched are not shown until their requests are captured.
