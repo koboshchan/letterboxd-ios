@@ -4,10 +4,12 @@ import LetterboxdKit
 @main
 struct LetterboxdApp: App {
     @State private var env = AppEnvironment.make()
+    @State private var account = AccountModel()
     var body: some Scene {
         WindowGroup {
             RootView()
                 .environment(env)
+                .environment(account)
                 .preferredColorScheme(.dark)
                 .tint(Theme.green)
         }
@@ -40,15 +42,17 @@ final class AppEnvironment {
 struct RootView: View {
     @Environment(AppEnvironment.self) private var env
     @State private var browsePath: [FilmSummary] = AppEnvironment.arg("-UIFilm").map { [FilmSummary(slug: $0, title: AppEnvironment.arg("-UIFilmTitle") ?? $0, year: nil)] } ?? []
+    @State private var showSignIn = ProcessInfo.processInfo.arguments.contains("-UISignIn")
     @State private var selection = Int(AppEnvironment.arg("-UITab") ?? "0") ?? 0
     var body: some View {
         TabView(selection: $selection) {
-            Tab("Profile", systemImage: "person.crop.circle", value: 0) { NavigationStack { ProfileScreen().fixtureBanner(env.isFixtureMode) } }
+            Tab("Profile", systemImage: "person.crop.circle", value: 0) { NavigationStack { ProfileScreen().fixtureBanner(env.isFixtureMode).toolbar { AccountButton(showSignIn: $showSignIn) } } }
             Tab("Browse", systemImage: "film.stack", value: 1) { NavigationStack(path: $browsePath) { BrowseScreen().fixtureBanner(env.isFixtureMode) } }
             Tab("Search", systemImage: "magnifyingglass", value: 2, role: .search) { NavigationStack { SearchScreen().fixtureBanner(env.isFixtureMode) } }
             Tab("About", systemImage: "info.circle", value: 3) { NavigationStack { AboutScreen() } }
         }
         .background(Color.black)
+        .sheet(isPresented: $showSignIn) { SignInScreen() }
     }
 }
 
