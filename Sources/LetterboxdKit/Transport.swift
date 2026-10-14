@@ -9,6 +9,7 @@ public struct HTTPResult: Sendable { public let data: Data; public let status: I
 /// Replaceable transport. Only GET exists by design: the app is read-only.
 public protocol HTTPTransport: Sendable {
     func get(_ url: URL, accept: String) async throws -> HTTPResult
+    func send(_ request: WriteRequest) async throws -> HTTPResult
 }
 
 /// Redirect policy. Authenticated requests (carrying a Cookie) never follow ANY redirect, including 307/308, so
@@ -46,8 +47,8 @@ final class RedirectGuard: NSObject, URLSessionTaskDelegate, @unchecked Sendable
 }
 
 public struct URLSessionTransport: HTTPTransport {
-    private let configuration: URLSessionConfiguration
-    private let cookieHeader: (@Sendable () -> String?)?
+    let configuration: URLSessionConfiguration
+    let cookieHeader: (@Sendable () -> String?)?
     let redirectObserver: (@Sendable (Int, URL?, Bool) -> Void)?
     let enforceRedirectPolicy: Bool
     var testSite: (@Sendable (URL) -> Bool)? = nil
