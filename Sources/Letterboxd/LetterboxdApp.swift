@@ -63,13 +63,10 @@ struct RootView: View {
     private var tabs: some View {
         TabView(selection: $selection) {
             Tab("Profile", systemImage: "person.crop.circle", value: 0) { NavigationStack {
-                ProfileScreen().toolbar { AccountButton() }
-                    .navigationDestination(for: NetworkRoute.self) { MemberListScreen(route: $0) }
-                    .navigationDestination(for: ListRoute.self) { ListDetailScreen(list: $0.list) }
-                    .navigationDestination(for: MemberRoute.self) { ProfileScreen(memberUsername: $0.username) }
+                ProfileScreen().toolbar { AccountButton() }.sharedDestinations()
             } }
-            Tab("Browse", systemImage: "film.stack", value: 1) { NavigationStack(path: $browsePath) { BrowseScreen() } }
-            Tab("Search", systemImage: "magnifyingglass", value: 2, role: .search) { NavigationStack { SearchScreen() } }
+            Tab("Browse", systemImage: "film.stack", value: 1) { NavigationStack(path: $browsePath) { BrowseScreen().sharedDestinations() } }
+            Tab("Search", systemImage: "magnifyingglass", value: 2, role: .search) { NavigationStack { SearchScreen().sharedDestinations() } }
         }
     }
 }
@@ -107,4 +104,15 @@ struct GateScreen: View {
 enum Legal {
     /// Disclosures kept from the former About screen; shown on the sign-in gate.
     static let notice = "Unofficial client, not affiliated with Letterboxd and not using its API. Pages are fetched only when you open or refresh a screen and challenges or blocks are never bypassed. Letterboxd's terms prohibit automated gathering without authorization; use at your own discretion. Watchlist and like are supported; diary, review, list and profile edits are not."
+}
+
+
+extension View {
+    /// Every tab's stack must resolve the same routes: a review author, a list row or a follower link can be
+    /// reached from any tab (film -> reviews -> author), so registering them on one stack leaves dead taps.
+    func sharedDestinations() -> some View {
+        navigationDestination(for: NetworkRoute.self) { MemberListScreen(route: $0) }
+            .navigationDestination(for: ListRoute.self) { ListDetailScreen(list: $0.list) }
+            .navigationDestination(for: MemberRoute.self) { ProfileScreen(memberUsername: $0.username) }
+    }
 }

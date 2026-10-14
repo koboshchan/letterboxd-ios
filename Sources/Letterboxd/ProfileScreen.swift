@@ -136,15 +136,21 @@ struct EntryRow: View {
 
 struct EntryScreen: View {
     let entry: ActivityEntry
+    @Environment(AppEnvironment.self) private var env
+    @State private var full: String?
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 Text(entry.filmTitle).font(Theme.serif(34, weight: .bold))
                 if let r = entry.rating { StarsView(rating: r) }
-                if let rv = entry.review { Text(rv).font(.body) } else { Text("No written review.").foregroundStyle(.secondary) }
+                if let rv = entry.review { Text(full ?? rv).font(.body).textSelection(.enabled) } else { Text("No written review.").foregroundStyle(.secondary) }
                 Link(destination: entry.link) { Label("Open on Letterboxd", systemImage: "safari") }.buttonStyle(.bordered)
             }.padding(20).frame(maxWidth: .infinity, alignment: .leading)
         }.navigationBarTitleDisplayMode(.inline)
+        .task {
+            guard entry.review != nil, full == nil else { return }
+            full = try? await env.service.entryReviewText(link: entry.link)
+        }
     }
 }
 

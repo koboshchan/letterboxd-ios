@@ -78,3 +78,16 @@ extension Validate {
         return p
     }
 }
+
+extension Validate {
+    /// Canonical review page: https://letterboxd.com/<user>/film/<slug>/ or .../<n>/ for repeat viewings.
+    public static func reviewPage(_ u: URL) throws -> URL {
+        guard u.scheme == "https", u.host == "letterboxd.com", u.port == nil, u.user == nil, u.query == nil, u.fragment == nil else { throw LetterboxdError.invalidInput("review url") }
+        let c = u.pathComponents.filter { $0 != "/" }
+        guard c.count == 3 || c.count == 4, c[1] == "film" else { throw LetterboxdError.invalidInput("review url") }
+        var parts = [try username(c[0]), "film", try slug(c[2])]
+        if c.count == 4 { guard c[3].range(of: "^[0-9]{1,4}$", options: .regularExpression) != nil else { throw LetterboxdError.invalidInput("review url") }; parts.append(c[3]) }
+        guard let out = URL(string: "https://letterboxd.com/" + parts.joined(separator: "/") + "/") else { throw LetterboxdError.invalidInput("review url") }
+        return out
+    }
+}

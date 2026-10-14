@@ -12,6 +12,17 @@ public enum Parsers {
         guard !t.isEmpty else { throw LetterboxdError.parse("full text") }
         return t
     }
+    /// A review page carries its viewing id in data-likeable-identifier ({"uid":"viewing:<id>"}); captured on a real review page.
+    public static func reviewFullTextPath(html: String) throws -> String {
+        let doc = try SwiftSoup.parse(html)
+        for el in try doc.select("[data-likeable-identifier]").array() {
+            let raw = try el.attr("data-likeable-identifier")
+            if let r = raw.range(of: #"viewing:[0-9]{1,18}"#, options: .regularExpression) {
+                return try Validate.fullTextPath("/s/full-text/" + raw[r] + "/")
+            }
+        }
+        throw LetterboxdError.parse("review id")
+    }
     static func splitTitleYear(_ s: String) -> (String, Int?) {
         let t = s.trimmingCharacters(in: .whitespacesAndNewlines)
         if let r = t.range(of: #" \((\d{4})\)$"#, options: .regularExpression) {

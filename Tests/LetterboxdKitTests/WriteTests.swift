@@ -133,3 +133,20 @@ final class CapabilityTests: XCTestCase {
         XCTAssertEqual(u.absoluteString, "https://letterboxd.com/s/check-viewingable-relation?viewingableUID=film:42")
     }
 }
+
+final class EntryReviewTests: XCTestCase {
+    func testReviewPageViewingPath() throws {
+        let h = #"<p class="like-link-target" data-likeable-identifier='{&#034;lid&#034;:&#034;eyIrKh&#034;,&#034;uid&#034;:&#034;viewing:1333884816&#034;,&#034;type&#034;:&#034;viewing&#034;}'></p>"#
+        XCTAssertEqual(try Parsers.reviewFullTextPath(html: h), "/s/full-text/viewing:1333884816/")
+        XCTAssertThrowsError(try Parsers.reviewFullTextPath(html: "<p>none</p>"))
+        let film = #"<p data-likeable-identifier='{&#034;uid&#034;:&#034;film:109688&#034;}'></p>"#
+        XCTAssertThrowsError(try Parsers.reviewFullTextPath(html: film))
+    }
+    func testReviewPageValidation() throws {
+        XCTAssertEqual(try Validate.reviewPage(URL(string: "https://letterboxd.com/uu/film/your-name/")!).absoluteString, "https://letterboxd.com/uu/film/your-name/")
+        XCTAssertEqual(try Validate.reviewPage(URL(string: "https://letterboxd.com/uu/film/your-name/2/")!).path, "/uu/film/your-name/2/")
+        for bad in ["http://letterboxd.com/uu/film/a/", "https://evil.com/u/film/a/", "https://letterboxd.com/uu/film/a/?x=1", "https://letterboxd.com/uu/film/a/x/", "https://letterboxd.com/u/list/a/", "https://letterboxd.com:8443/u/film/a/", "https://a@letterboxd.com/u/film/a/"] {
+            XCTAssertThrowsError(try Validate.reviewPage(URL(string: bad)!), bad)
+        }
+    }
+}

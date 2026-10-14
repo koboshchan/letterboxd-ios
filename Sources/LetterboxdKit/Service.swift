@@ -15,6 +15,7 @@ public protocol LetterboxdService: Sendable {
     func followers(username: String, page: Int, refresh: Bool) async throws -> Page<MemberSummary>
     func filmReviews(slug: String, page: Int, refresh: Bool) async throws -> Page<FilmReview>
     func fullReviewText(path: String) async throws -> String
+    func entryReviewText(link: URL) async throws -> String
     func listFilms(list: URL, page: Int, refresh: Bool) async throws -> Page<FilmSummary>
     func filmLists(slug: String, page: Int, refresh: Bool) async throws -> Page<ListSummary>
     func personFilms(role: PersonRole, slug: String, page: Int, refresh: Bool) async throws -> Page<FilmSummary>
@@ -79,6 +80,11 @@ public final class PublicWebService: LetterboxdService {
     public func fullReviewText(path: String) async throws -> String {
         guard let u = URL(string: "https://letterboxd.com" + (try Validate.fullTextPath(path))) else { throw LetterboxdError.invalidInput("path") }
         return try Parsers.fullText(html: try await fetcher.text(try Validate.url(u), accept: "text/html"))
+    }
+    public func entryReviewText(link: URL) async throws -> String {
+        let page = try Validate.reviewPage(link)
+        let path = try Parsers.reviewFullTextPath(html: try await fetcher.text(page, accept: "text/html"))
+        return try await fullReviewText(path: path)
     }
     public func filmReviews(slug: String, page: Int, refresh: Bool) async throws -> Page<FilmReview> {
         let s = try Validate.slug(slug)
