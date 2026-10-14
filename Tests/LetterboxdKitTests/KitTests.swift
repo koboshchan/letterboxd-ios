@@ -158,4 +158,41 @@ final class AuthTests: XCTestCase {
         do { _ = try await UnavailableAccountService().createList(name: "x", isPrivate: true); XCTFail() } catch { if case AuthError.unsupported = error {} else { XCTFail() } }
     }
 }
+final class MockAuth: AuthTransport, @unchecked Sendable {
+    var calls: [(String, String, [String: String]?)] = []
+    var loginBody: String; var loginStatus: Int; var homeStatus: Int
+    init(login: String, loginStatus: Int = 200, home: Int = 200) { loginBody = login; self.loginStatus = loginStatus; homeStatus = home }
+    func send(method: String, url: URL, form: [String: String]?, cookies: [String: String]) async throws -> AuthResponse {
+        calls.append((method, url.path, form))
+        if method == "GET" { return AuthResponse(data: Data(), status: homeStatus, setCookies: homeStatus == 200 ? ["com.xk72.webparts.csrf": "tok"] : [:]) }
+        return AuthResponse(data: Data(loginBody.utf8), status: loginStatus, setCookies: ["letterboxd.user.CURRENT": "c"])
+    }
+}
+final class SignInTests: XCTestCase {
+    let ok = #"{"result":"success","messages":[],"csrf":"x"}"#
+    func testSuccessStoresSessionAndSendsRecordedFields() async throws {
+        let m = MockAuth(login: ok), s = InMemorySessionStore()
+        let sess = try await LiveAccountService(transport: m, store: s).signIn(username: "u", password: "p")
+        XCTAssertEqual(try s.load(), sess); XCTAssertEqual(sess.cookies["letterboxd.user.CURRENT"], "c")
+        let f = m.calls.last!.2!; XCTAssertEqual(Set(f.keys), ["__csrf", "authenticationCode", "username", "password", "remember"]); XCTAssertEqual(f["__csrf"], "tok")
+        XCTAssertEqual(m.calls.last!.1, "/user/login.do")
+    }
+    func testFailureDoesNotStore() async {
+        let s = InMemorySessionStore()
+        do { _ = try await LiveAccountService(transport: MockAuth(login: #"{"result":"error","messages":["bad"]}"#), store: s).signIn(username: "u", password: "p"); XCTFail() } catch { XCTAssertEqual(error as? AuthError, .badCredentials) }
+        XCTAssertNil(try? s.load())
+    }
+    func testEmailRejectedWithoutNetwork() async {
+        let m = MockAuth(login: ok)
+        do { _ = try await LiveAccountService(transport: m, store: InMemorySessionStore()).signIn(username: "a@b.c", password: "p"); XCTFail() } catch {}
+        XCTAssertTrue(m.calls.isEmpty)
+    }
+    func testChallengeSurfacesVerificationRequired() async {
+        do { _ = try await LiveAccountService(transport: MockAuth(login: ok, home: 403), store: InMemorySessionStore()).signIn(username: "u", password: "p"); XCTFail() } catch { XCTAssertEqual(error as? AuthError, .verificationRequired) }
+    }
+    func testSignOutClears() async throws {
+        let s = InMemorySessionStore(); try s.save(Session(username: "u", cookies: [:]))
+        try await LiveAccountService(transport: MockAuth(login: ok), store: s).signOut(); XCTAssertNil(try s.load())
+    }
+}
 actor SeenURLs { var all: [URL] = []; func add(_ u: URL) { all.append(u) } }
