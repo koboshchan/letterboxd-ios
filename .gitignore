@@ -6,3 +6,15 @@ DerivedData/
 .swiftpm/
 raw-private.har
 *.private.json
+
+# network captures stay local; files already tracked are unaffected
+*.har
+*.private.json
+*.private.html
+*raw-login*
+live-test-operations*
+network-capture/
+letterboxd-network/
+Tests/LetterboxdKitTests/Fixtures/capture/
+Tests/LetterboxdKitTests/Fixtures/initial-403/
+Tests/LetterboxdKitTests/Fixtures/recorded/
