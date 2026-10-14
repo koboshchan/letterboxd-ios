@@ -60,7 +60,7 @@ public struct URLSessionTransport: HTTPTransport {
                 // Session-level delegate (per request): redirect handling is enforced on every platform.
                 let s = URLSession(configuration: configuration, delegate: RedirectGuard(authenticated: authenticated), delegateQueue: nil)
                 defer { s.finishTasksAndInvalidate() }
-                return try await s.data(for: r)
+                return try await s.data(for: r, delegate: RedirectGuard(authenticated: authenticated))
             }()
             return HTTPResult(data: d, status: (resp as? HTTPURLResponse)?.statusCode ?? 0)
         } catch is CancellationError { throw LetterboxdError.cancelled
