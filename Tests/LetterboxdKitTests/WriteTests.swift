@@ -116,3 +116,20 @@ final class FullTextPathTests: XCTestCase {
         }
     }
 }
+
+final class CapabilityTests: XCTestCase {
+    func testOnlyCapturedWritesSupported() {
+        let ok = Set(WriteFeature.allCases.filter { $0.status == .supported })
+        XCTAssertEqual(ok, [.watchlist, .like])
+        for f in WriteFeature.allCases where !ok.contains(f) { if case .unverified(let r) = f.status { XCTAssertFalse(r.isEmpty) } else { XCTFail() } }
+    }
+    func testRelationRequestIsSafeAndSameHost() async throws {
+        actor R { var urls: [URL] = []; func add(_ u: URL) { urls.append(u) } }
+        struct T: HTTPTransport { let r: R
+            func get(_ u: URL, accept: String) async throws -> HTTPResult { await r.add(u); return HTTPResult(data: Data(#"{"result":true,"liked":false,"isInWatchlist":true}"#.utf8), status: 200) } }
+        let r = R(); let f = FilmActions(transport: T(r: r), auth: { let a = AuthAuthority(); a.setValidated(Session(username: "tester", cookies: [WebCookie(name: "letterboxd.user.CURRENT", value: "v", domain: "letterboxd.com")])); return a }())
+        _ = try await f.relation(FilmHandle(slug: "a", lid: "x", id: 42, csrf: "c"))
+        let u = await r.urls[0]
+        XCTAssertEqual(u.absoluteString, "https://letterboxd.com/s/check-viewingable-relation?viewingableUID=film:42")
+    }
+}

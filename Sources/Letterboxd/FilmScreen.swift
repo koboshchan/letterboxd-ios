@@ -39,6 +39,7 @@ struct FilmScreen: View {
                     ErrorCard(error: e, retry: { Task { await loader?.load(refresh: true) } }, link: summary.pageURL)
                 } else { ProgressView().frame(maxWidth: .infinity).padding() }
                 FilmActionBar(model: FilmActionsModel(client: env.actions, auth: env.auth, slug: summary.slug))
+                UnverifiedWriteRows(features: [.logDiary, .rate, .review, .addToList])
                 NavigationLink { FilmReviewsScreen(film: summary) } label: { Label("Reviews", systemImage: "text.bubble") }.buttonStyle(.bordered)
                 NavigationLink { FilmListsScreen(film: summary) } label: { Label("Lists featuring this film", systemImage: "list.bullet.rectangle") }.buttonStyle(.bordered)
             }.padding(20)
