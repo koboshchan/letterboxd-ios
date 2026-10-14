@@ -38,7 +38,8 @@ struct FilmScreen: View {
                 } else if let e = loader?.error {
                     ErrorCard(error: e, retry: { Task { await loader?.load(refresh: true) } }, link: summary.pageURL)
                 } else { ProgressView().frame(maxWidth: .infinity).padding() }
-                Link(destination: summary.pageURL) { Label("Reviews and lists on Letterboxd", systemImage: "safari") }.buttonStyle(.bordered)
+                NavigationLink { FilmReviewsScreen(film: summary) } label: { Label("Reviews", systemImage: "text.bubble") }.buttonStyle(.bordered)
+                NavigationLink { FilmListsScreen(film: summary) } label: { Label("Lists featuring this film", systemImage: "list.bullet.rectangle") }.buttonStyle(.bordered)
             }.padding(20)
         }
         .ignoresSafeArea(edges: .top)
