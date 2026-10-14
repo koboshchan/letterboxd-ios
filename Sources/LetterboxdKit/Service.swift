@@ -15,6 +15,7 @@ public protocol LetterboxdService: Sendable {
     func following(username: String, page: Int, refresh: Bool) async throws -> Page<MemberSummary>
     func followers(username: String, page: Int, refresh: Bool) async throws -> Page<MemberSummary>
     func personFilms(role: PersonRole, slug: String, page: Int, refresh: Bool) async throws -> Page<FilmSummary>
+    func personPortrait(role: PersonRole, slug: String) async -> URL?
     func poster(for slug: String) async -> URL?
 }
 
@@ -71,6 +72,10 @@ public final class PublicWebService: LetterboxdService {
     public func personFilms(role: PersonRole, slug: String, page: Int, refresh: Bool) async throws -> Page<FilmSummary> {
         let s = try Validate.slug(slug)
         return try Parsers.filmGrid(html: try await fetcher.text(url([role.rawValue, s], page: page), forceRefresh: refresh), page: page)
+    }
+    public func personPortrait(role: PersonRole, slug: String) async -> URL? {
+        guard let s = try? Validate.slug(slug), let h = try? await fetcher.text(url([role.rawValue, s]), forceRefresh: false) else { return nil }
+        return Parsers.personPortrait(html: h)
     }
     public func film(slug: String, refresh: Bool) async throws -> FilmDetail {
         let s = try Validate.slug(slug)

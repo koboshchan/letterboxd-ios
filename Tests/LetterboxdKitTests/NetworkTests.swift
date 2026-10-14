@@ -56,4 +56,12 @@ final class NetworkTests: XCTestCase {
     func testPersonName() throws {
         XCTAssertEqual(Parsers.personName(html: #"<meta property="og:title" content="Films starring Brad Pitt">"#), "Brad Pitt")
     }
+
+    func testPersonPortraitFromRealTag() {
+        let real = #"<img src="https://s.ltrbxd.com/static/img/empty-DtpQRXf9.png" class="js-tmdb-person" data-image="https://image.tmdb.org/t/p/w500/m09Y1YfPPeNYYUSHnnVqahkrC1o.jpg" data-tmdb-id="287" />"#
+        XCTAssertEqual(Parsers.personPortrait(html: real)?.absoluteString, "https://image.tmdb.org/t/p/w500/m09Y1YfPPeNYYUSHnnVqahkrC1o.jpg")
+        for bad in ["http://image.tmdb.org/t/p/w500/a.jpg", "https://evil.example/t/p/w500/a.jpg", "https://image.tmdb.org/other/a.jpg", "https://image.tmdb.org:8443/t/p/a.jpg", "https://image.tmdb.org.evil.com/t/p/a.jpg"] {
+            XCTAssertNil(Parsers.personPortrait(html: #"<img class="js-tmdb-person" data-image="\#(bad)">"#), bad)
+        }
+    }
 }

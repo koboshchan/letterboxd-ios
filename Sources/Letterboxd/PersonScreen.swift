@@ -50,16 +50,25 @@ struct PersonScreen: View {
     @Environment(AppEnvironment.self) private var env
     let credit: Credit
     @State private var loader: PagedLoader<FilmSummary>?
+    @State private var portrait: URL?
     var body: some View {
         Group {
             if let loader {
+                VStack(spacing: 0) {
+                    if let portrait {
+                        AsyncImage(url: portrait) { $0.resizable().scaledToFill() } placeholder: { Color.secondary.opacity(0.15) }
+                            .frame(width: 96, height: 128).clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .padding(.top, 8).accessibilityLabel(credit.name)
+                    }
                 PosterGrid(loader: loader, emptyTitle: "No films", emptyBody: "Letterboxd lists no films for \(credit.name).")
+                }
             } else { ProgressView() }
         }
         .navigationTitle(credit.name).navigationBarTitleDisplayMode(.inline)
         .task {
             guard loader == nil else { return }
             let s = env.service, r = credit.role, slug = credit.slug
+            Task { portrait = await s.personPortrait(role: r, slug: slug) }
             loader = PagedLoader { p, refresh in try await s.personFilms(role: r, slug: slug, page: p, refresh: refresh) }
         }
     }

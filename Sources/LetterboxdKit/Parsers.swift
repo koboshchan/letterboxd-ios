@@ -104,6 +104,15 @@ public enum Parsers {
         return t.isEmpty ? nil : t
     }
 
+    /// Portrait from the real person page: <img class="js-tmdb-person" data-image="https://image.tmdb.org/t/p/w500/...jpg">.
+    /// Only https image.tmdb.org /t/p/ paths are accepted.
+    public static func personPortrait(html: String) -> URL? {
+        guard let doc = try? SwiftSoup.parse(html), let raw = try? doc.select("img.js-tmdb-person").first()?.attr("data-image"),
+              let u = URL(string: raw), u.scheme == "https", u.host == "image.tmdb.org", u.port == nil, u.user == nil,
+              u.path.hasPrefix("/t/p/"), u.query == nil else { return nil }
+        return u
+    }
+
     // MARK: profile
     public static func profile(html: String, username: String) throws -> Profile {
         let doc = try SwiftSoup.parse(html, "https://letterboxd.com/")
