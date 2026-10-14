@@ -6,6 +6,7 @@ enum ProfileTab: String, CaseIterable, Identifiable { case films = "Films", diar
 
 /// Navigation values for member screens. They carry only a username that came from a parsed Letterboxd member row.
 struct MemberRoute: Hashable { let username: String }
+struct ListRoute: Hashable { let list: ListSummary }
 struct NetworkRoute: Hashable { let username: String; let kind: NetworkKind }
 enum NetworkKind: String, Hashable { case following = "Following", followers = "Followers" }
 
@@ -152,7 +153,7 @@ struct ListsView: View {
     var body: some View {
         List {
             ForEach(loader.items) { l in
-                Link(destination: l.url) {
+                NavigationLink(value: ListRoute(list: l)) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(l.title).font(Theme.serif(17))
                         if let c = l.filmCount { Text("\(c) films").font(.caption).foregroundStyle(Theme.green) }

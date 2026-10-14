@@ -14,6 +14,7 @@ public protocol LetterboxdService: Sendable {
     func following(username: String, page: Int, refresh: Bool) async throws -> Page<MemberSummary>
     func followers(username: String, page: Int, refresh: Bool) async throws -> Page<MemberSummary>
     func filmReviews(slug: String, page: Int, refresh: Bool) async throws -> Page<FilmReview>
+    func listFilms(list: URL, page: Int, refresh: Bool) async throws -> Page<FilmSummary>
     func filmLists(slug: String, page: Int, refresh: Bool) async throws -> Page<ListSummary>
     func personFilms(role: PersonRole, slug: String, page: Int, refresh: Bool) async throws -> Page<FilmSummary>
     func personPortrait(role: PersonRole, slug: String) async -> URL?
@@ -77,6 +78,10 @@ public final class PublicWebService: LetterboxdService {
     public func filmReviews(slug: String, page: Int, refresh: Bool) async throws -> Page<FilmReview> {
         let s = try Validate.slug(slug)
         return try Parsers.filmReviews(html: try await fetcher.text(url(["film", s, "reviews"], page: page), forceRefresh: refresh), page: page)
+    }
+    public func listFilms(list: URL, page: Int, refresh: Bool) async throws -> Page<FilmSummary> {
+        let (u, s) = try Validate.listPath(list)
+        return try Parsers.filmGrid(html: try await fetcher.text(url([u, "list", s], page: page), forceRefresh: refresh), page: page)
     }
     public func filmLists(slug: String, page: Int, refresh: Bool) async throws -> Page<ListSummary> {
         let s = try Validate.slug(slug)

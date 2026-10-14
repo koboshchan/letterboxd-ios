@@ -61,6 +61,7 @@ struct RootView: View {
             Tab("Profile", systemImage: "person.crop.circle", value: 0) { NavigationStack {
                 ProfileScreen().toolbar { AccountButton() }
                     .navigationDestination(for: NetworkRoute.self) { MemberListScreen(route: $0) }
+                    .navigationDestination(for: ListRoute.self) { ListDetailScreen(list: $0.list) }
                     .navigationDestination(for: MemberRoute.self) { ProfileScreen(memberUsername: $0.username) }
             } }
             Tab("Browse", systemImage: "film.stack", value: 1) { NavigationStack(path: $browsePath) { BrowseScreen() } }

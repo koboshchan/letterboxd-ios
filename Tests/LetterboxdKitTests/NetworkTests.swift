@@ -95,4 +95,16 @@ final class NetworkTests: XCTestCase {
         XCTAssertTrue(p.hasNext)
         XCTAssertFalse(p.items.contains { $0.url.host != "letterboxd.com" }, "offsite list link must not be accepted")
     }
+    func testListDetailGridFromRealShape() throws {
+        let p = try Parsers.filmGrid(html: try fixtureText("real-list-detail-shape", "html"), page: 1)
+        XCTAssertEqual(p.items.count, 3); XCTAssertTrue(p.hasNext)
+        XCTAssertEqual(Set(p.items.map(\.slug)).count, 3)
+    }
+    func testListPathValidation() throws {
+        let ok = try Validate.listPath(URL(string: "https://letterboxd.com/amy/list/my-list/")!)
+        XCTAssertEqual(ok.user, "amy"); XCTAssertEqual(ok.slug, "my-list")
+        for bad in ["http://letterboxd.com/amy/list/x/", "https://evil.example/amy/list/x/", "https://letterboxd.com/amy/list/x/?a=1", "https://letterboxd.com:444/amy/list/x/", "https://letterboxd.com/amy/film/x/", "https://letterboxd.com/amy/list/../x/", "https://letterboxd.com/amy/list/"] {
+            XCTAssertThrowsError(try Validate.listPath(URL(string: bad)!), bad)
+        }
+    }
 }

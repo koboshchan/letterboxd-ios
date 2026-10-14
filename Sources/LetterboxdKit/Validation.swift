@@ -42,6 +42,13 @@ public enum Validate {
         }
         return t
     }
+    /// "/<user>/list/<slug>/" on letterboxd.com only (from a parsed ListSummary).
+    public static func listPath(_ u: URL) throws -> (user: String, slug: String) {
+        guard u.scheme == "https", u.host == "letterboxd.com", u.port == nil, u.user == nil, u.query == nil, u.fragment == nil else { throw LetterboxdError.invalidInput("list url") }
+        let c = u.pathComponents.filter { $0 != "/" }
+        guard c.count == 3, c[1] == "list" else { throw LetterboxdError.invalidInput("list url") }
+        return (try username(c[0]), try slug(c[2]))
+    }
     public static func slug(_ s: String) throws -> String {
         let t = s.trimmingCharacters(in: .whitespaces).lowercased()
         guard t.range(of: #"^[a-z0-9][a-z0-9-]{0,120}$"#, options: .regularExpression) != nil else {
