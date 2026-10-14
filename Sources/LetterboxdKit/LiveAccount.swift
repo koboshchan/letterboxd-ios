@@ -16,6 +16,8 @@ public enum NavigationPolicy {
     static let mainHosts: Set<String> = ["letterboxd.com", "www.letterboxd.com"]
     static let frameHosts: Set<String> = mainHosts.union(["challenges.cloudflare.com"])
     public static func allows(_ url: URL?, mainFrame: Bool) -> Bool {
+        // Cloudflare documents that Turnstile needs about:blank / about:srcdoc inside its widget subframe. Never for the main frame.
+        if !mainFrame, let u = url, u.scheme?.lowercased() == "about", ["blank", "srcdoc"].contains(u.absoluteString.lowercased().dropFirst(6)) { return true }
         guard let url, url.scheme?.lowercased() == "https", url.user == nil, url.port == nil || url.port == 443,
               let host = url.host?.lowercased() else { return false }
         return (mainFrame ? mainHosts : frameHosts).contains(host)

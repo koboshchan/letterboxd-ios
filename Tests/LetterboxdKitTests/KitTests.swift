@@ -255,6 +255,12 @@ final class SignInTests: XCTestCase {
         XCTAssertTrue(NavigationPolicy.allows(URL(string: "https://challenges.cloudflare.com/x"), mainFrame: false))
         XCTAssertFalse(NavigationPolicy.allows(URL(string: "http://challenges.cloudflare.com/x"), mainFrame: false))
         XCTAssertFalse(NavigationPolicy.allows(nil, mainFrame: true))
+        XCTAssertTrue(NavigationPolicy.allows(URL(string: "about:blank"), mainFrame: false))
+        XCTAssertTrue(NavigationPolicy.allows(URL(string: "about:srcdoc"), mainFrame: false))
+        XCTAssertFalse(NavigationPolicy.allows(URL(string: "about:blank"), mainFrame: true))
+        XCTAssertFalse(NavigationPolicy.allows(URL(string: "about:blank#x"), mainFrame: false))
+        XCTAssertFalse(NavigationPolicy.allows(URL(string: "javascript:alert(1)"), mainFrame: false))
+        XCTAssertFalse(NavigationPolicy.allows(URL(string: "data:text/html,x"), mainFrame: false))
     }
     func testRealPopularGridParsesFilms() throws {
         let p = try Parsers.filmGrid(html: try html("popular-grid"), page: 1)

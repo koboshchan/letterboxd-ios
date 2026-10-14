@@ -84,8 +84,14 @@ struct SiteWebView: UIViewRepresentable {
     func updateUIView(_ v: WKWebView, context: Context) {}
     final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
         func webView(_ w: WKWebView, decidePolicyFor a: WKNavigationAction) async -> WKNavigationActionPolicy {
-            NavigationPolicy.allows(a.request.url, mainFrame: a.targetFrame?.isMainFrame ?? true) && a.targetFrame != nil ? .allow : .cancel
+            let ok = NavigationPolicy.allows(a.request.url, mainFrame: a.targetFrame?.isMainFrame ?? true) && a.targetFrame != nil
+            #if DEBUG
+            NSLog("NAV %@ scheme=%@ host=%@ main=%d target=%@", ok ? "ALLOW" : "CANCEL", a.request.url?.scheme ?? "-", a.request.url?.host ?? "-", (a.targetFrame?.isMainFrame ?? true) ? 1 : 0, a.targetFrame == nil ? "nil" : "frame")
+            #endif
+            return ok ? .allow : .cancel
         }
+        func webView(_ w: WKWebView, didFail n: WKNavigation!, withError e: Error) { NSLog("NAV didFail code=%d", (e as NSError).code) }
+        func webView(_ w: WKWebView, didFailProvisionalNavigation n: WKNavigation!, withError e: Error) { NSLog("NAV didFailProv code=%d", (e as NSError).code) }
         func webView(_ w: WKWebView, createWebViewWith c: WKWebViewConfiguration, for a: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? { nil }
     }
 }
