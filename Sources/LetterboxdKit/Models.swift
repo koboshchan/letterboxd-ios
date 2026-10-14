@@ -80,6 +80,9 @@ public struct FilmReview: Hashable, Sendable, Identifiable {
     public let link: URL; public let author: String; public let username: String
     public let rating: Double?; public let text: String; public let date: Date?
     public let fullTextPath: String?
+    public init(link: URL, author: String, username: String, rating: Double?, text: String, date: Date?, fullTextPath: String?) {
+        self.link = link; self.author = author; self.username = username; self.rating = rating; self.text = text; self.date = date; self.fullTextPath = fullTextPath
+    }
 }
 public struct ActivityEntry: Hashable, Sendable, Identifiable, Codable {
     public var id: String { link.absoluteString }

@@ -8,7 +8,7 @@ final class FilmActionTests: XCTestCase {
         app.launchArguments = ["-Scenario", "ready", "-WriteMode", mode]
         continueAfterFailure = false
         app.launch()
-        app.buttons["Logged 1"].firstMatch.tap()
+        app.buttons["poster-logged-1"].firstMatch.tap()
         XCTAssertTrue(app.staticTexts["Synopsis for logged-1"].waitForExistence(timeout: 8))
         return app
     }

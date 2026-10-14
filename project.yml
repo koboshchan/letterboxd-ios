@@ -44,7 +44,7 @@ targets:
     platform: iOS
     sources:
       - path: Sources/Letterboxd
-        excludes: [AppMain.swift]
+        excludes: [AppMain.swift, Info.plist]
       - path: Tests/UITestHost
     dependencies:
       - package: LetterboxdKit

@@ -9,7 +9,8 @@ import LetterboxdKit
 final class FilmActionsModel {
     enum Flag: Equatable { case unknown, on, off }
     enum Notice: Equatable { case none, signIn, blocked, unconfirmed, loadFailed }
-    private(set) var watchlist = Flag.unknown, liked = Flag.unknown
+    private(set) var watchlist = Flag.unknown
+    private(set) var liked = Flag.unknown
     private(set) var busy = false
     private(set) var notice = Notice.none
     private let client: FilmActionsClient?, auth: AuthAuthority, slug: String

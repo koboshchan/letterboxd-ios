@@ -44,7 +44,11 @@ final class AppEnvironment {
 struct RootView: View {
     @Environment(AppEnvironment.self) private var env
     @Environment(AccountModel.self) private var account
-    @State private var browsePath: [FilmSummary] = AppEnvironment.arg("-UIFilm").map { [FilmSummary(slug: $0, title: AppEnvironment.arg("-UIFilmTitle") ?? $0, year: nil)] } ?? []
+    @State private var browsePath: NavigationPath = {
+        var p = NavigationPath()
+        if let slug = AppEnvironment.arg("-UIFilm") { p.append(FilmSummary(slug: slug, title: AppEnvironment.arg("-UIFilmTitle") ?? slug, year: nil)) }
+        return p
+    }()
     @State private var showSignIn = ProcessInfo.processInfo.arguments.contains("-UISignIn")
     @State private var selection = Int(AppEnvironment.arg("-UITab") ?? "0") ?? 0
     var body: some View {
@@ -114,5 +118,6 @@ extension View {
         navigationDestination(for: NetworkRoute.self) { MemberListScreen(route: $0) }
             .navigationDestination(for: ListRoute.self) { ListDetailScreen(list: $0.list) }
             .navigationDestination(for: MemberRoute.self) { ProfileScreen(memberUsername: $0.username) }
+            .navigationDestination(for: Credit.self) { PersonScreen(credit: $0) }
     }
 }

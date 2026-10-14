@@ -58,7 +58,6 @@ struct FilmScreen: View {
             }
         }
         .toolbarBackground(.hidden, for: .navigationBar)
-        .navigationDestination(for: Credit.self) { PersonScreen(credit: $0) }
         .task {
             let s = env.service, slug = summary.slug
             if loader == nil { loader = ValueLoader { r in try await s.film(slug: slug, refresh: r) } }
