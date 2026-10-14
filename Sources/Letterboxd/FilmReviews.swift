@@ -12,7 +12,7 @@ struct FilmReviewsScreen: View {
                 ForEach(l.items) { r in
                     VStack(alignment: .leading, spacing: 6) {
                         HStack {
-                            Text(r.author).font(.subheadline.weight(.semibold))
+                            NavigationLink(value: MemberRoute(username: r.username)) { Text(r.author).font(.subheadline.weight(.semibold)) }.buttonStyle(.plain)
                             if let s = r.rating { Label(String(format: "%.1f", s), systemImage: "star.fill").font(.caption).foregroundStyle(Theme.green) }
                             Spacer()
                             if let d = r.date { Text(d, style: .date).font(.caption).foregroundStyle(.secondary) }
