@@ -1,0 +1,8 @@
+<?xml version='1.0' encoding='utf-8'?>
+<rss version="2.0" xmlns:letterboxd="https://letterboxd.com"><channel><title>x</title>
+<item><title>Your Name, 2016 - ★★★★½</title><link>https://letterboxd.com/u/film/your-name/</link><guid>letterboxd-review-1</guid>
+<letterboxd:watchedDate>2026-10-01</letterboxd:watchedDate><letterboxd:rewatch>Yes</letterboxd:rewatch><letterboxd:filmTitle>Your Name.</letterboxd:filmTitle><letterboxd:filmYear>2016</letterboxd:filmYear><letterboxd:memberRating>4.5</letterboxd:memberRating>
+<description><![CDATA[<p><img src="https://a.ltrbxd.com/resized/film-poster/1/y-0-600-0-900-crop.jpg"/></p> <p>Beautiful and sad.</p>]]></description></item>
+<item><title>Plain, 2000</title><link>https://letterboxd.com/u/film/plain/</link><guid>letterboxd-watch-2</guid><letterboxd:watchedDate>2026-09-30</letterboxd:watchedDate><letterboxd:filmTitle>Plain</letterboxd:filmTitle><description><![CDATA[<p>Watched on Wednesday September 30, 2026.</p>]]></description></item>
+<item><title>Evil</title><link>https://evil.example/a</link></item>
+</channel></rss>

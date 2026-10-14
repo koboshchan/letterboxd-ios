@@ -1,0 +1,169 @@
+import Foundation
+import SwiftSoup
+#if canImport(FoundationXML)
+import FoundationXML
+#endif
+
+public enum Parsers {
+    static func splitTitleYear(_ s: String) -> (String, Int?) {
+        let t = s.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let r = t.range(of: #" \((\d{4})\)$"#, options: .regularExpression) {
+            let y = Int(t[r].filter(\.isNumber))
+            return (String(t[t.startIndex..<r.lowerBound]), y)
+        }
+        return (t, nil)
+    }
+    static func int(_ s: String) -> Int? { Int(s.filter(\.isNumber)) }
+
+    // MARK: poster grids (films, watchlist, popular)
+    public static func filmGrid(html: String, page: Int) throws -> Page<FilmSummary> {
+        let doc = try SwiftSoup.parse(html, "https://letterboxd.com/")
+        var out: [FilmSummary] = []
+        var seen = Set<String>()
+        for el in try doc.select("[data-item-slug]") {
+            let slug = try el.attr("data-item-slug")
+            guard (try? Validate.slug(slug)) != nil, seen.insert(slug).inserted else { continue }
+            let full = try el.attr("data-item-full-display-name")
+            let name = try el.attr("data-item-name")
+            let (title, year) = splitTitleYear(full.isEmpty ? name : full)
+            var poster: URL? = nil
+            if let src = try el.select("img[src]").first()?.attr("src"), src.contains("ltrbxd.com"), !src.contains("empty-poster") {
+                poster = URL(string: src)
+            }
+            out.append(FilmSummary(slug: slug, title: title, year: year, posterURL: poster))
+        }
+        let hasNext = !(try doc.select("a.next").isEmpty())
+        return Page(items: out, page: page, hasNext: hasNext)
+    }
+
+    // MARK: film detail via JSON-LD (+ og fallback)
+    public static func filmDetail(html: String, slug: String) throws -> FilmDetail {
+        let doc = try SwiftSoup.parse(html, "https://letterboxd.com/")
+        var json: [String: Any]? = nil
+        for s in try doc.select("script[type=application/ld+json]") {
+            var t = s.data()
+            t = t.replacingOccurrences(of: "/* <![CDATA[ */", with: "").replacingOccurrences(of: "/* ]]> */", with: "")
+            if let d = t.trimmingCharacters(in: .whitespacesAndNewlines).data(using: .utf8),
+               let o = try? JSONSerialization.jsonObject(with: d) as? [String: Any], (o["@type"] as? String) == "Movie" { json = o; break }
+        }
+        guard let j = json else { throw LetterboxdError.parse("film JSON-LD missing") }
+        func people(_ k: String) -> [Person] {
+            (j[k] as? [[String: Any]] ?? []).compactMap { p in
+                guard let n = p["name"] as? String else { return nil }
+                return Person(name: n, url: (p["sameAs"] as? String).flatMap(URL.init(string:)).flatMap { try? Validate.url($0) })
+            }
+        }
+        let ogT = try doc.select("meta[property=og:title]").first()?.attr("content")
+        let rawName = j["name"] as? String ?? ogT ?? ""
+        let (title, ogYear) = splitTitleYear(rawName)
+        var year = ogYear
+        if year == nil, let rel = (j["releasedEvent"] as? [[String: Any]])?.first?["startDate"] as? String { year = Int(rel.prefix(4)) }
+        var minutes: Int? = nil
+        if let d = j["duration"] as? String, let m = d.range(of: #"PT(?:(\d+)H)?(?:(\d+)M)?"#, options: .regularExpression) {
+            let parts = d[m].replacingOccurrences(of: "PT", with: "")
+            let h = parts.split(separator: "H").first.flatMap { parts.contains("H") ? Int($0) : nil } ?? 0
+            let mm = parts.components(separatedBy: "H").last.flatMap { Int($0.replacingOccurrences(of: "M", with: "")) } ?? 0
+            minutes = h * 60 + mm
+        }
+        let agg = j["aggregateRating"] as? [String: Any]
+        let avg = (agg?["ratingValue"] as? Double) ?? (agg?["ratingValue"] as? NSNumber)?.doubleValue
+        let cnt = (agg?["ratingCount"] as? Int)
+        let tagline = try doc.select("h4.tagline").first()?.text()
+        let blurb = try doc.select("div.truncate p").first()?.text() ?? (j["description"] as? String)
+        return FilmDetail(slug: slug, title: title, year: year, tagline: tagline, synopsis: blurb,
+                          posterURL: (j["image"] as? String).flatMap(URL.init(string:)).flatMap { try? Validate.url($0) },
+                          runtimeMinutes: minutes, directors: people("director"), cast: people("actor"),
+                          genres: (j["genre"] as? [String]) ?? [], averageRating: avg, ratingCount: cnt)
+    }
+
+    // MARK: profile
+    public static func profile(html: String, username: String) throws -> Profile {
+        let doc = try SwiftSoup.parse(html, "https://letterboxd.com/")
+        let ogTitle = try doc.select("meta[property=og:title]").first()?.attr("content") ?? ""
+        var name = ogTitle.replacingOccurrences(of: "’s profile", with: "").replacingOccurrences(of: "'s profile", with: "")
+        if let h = try doc.select("h1.title-1, h1.person-display-name, span.displayname").first()?.text(), !h.isEmpty { name = h }
+        guard !name.isEmpty else { throw LetterboxdError.parse("profile name missing") }
+        let avatar = try doc.select("meta[property=og:image]").first()?.attr("content")
+        var stats: [String: Int] = [:]
+        for el in try doc.select(".profile-statistic, .profile-stats a, h4.profile-statistic") {
+            let t = try el.text()
+            for key in ["Films", "Following", "Followers"] where t.contains(key) { if let v = int(t.replacingOccurrences(of: key, with: "")) { stats[key] = v } }
+        }
+        let bio = try doc.select(".profile-bio, .bio .collapsed-text, meta[name=description]").first()
+        let bioText = try bio.map { $0.tagName() == "meta" ? try $0.attr("content") : try $0.text() }
+        return Profile(username: username, displayName: name, avatarURL: avatar.flatMap(URL.init(string:)).flatMap { try? Validate.url($0) },
+                       bio: bioText?.isEmpty == true ? nil : bioText, filmCount: stats["Films"], followingCount: stats["Following"], followersCount: stats["Followers"])
+    }
+
+    // MARK: lists
+    public static func lists(html: String, page: Int) throws -> Page<ListSummary> {
+        let doc = try SwiftSoup.parse(html, "https://letterboxd.com/")
+        var out: [ListSummary] = []
+        for sec in try doc.select("section.list, div.film-list-summary, article.list-summary, section.-overlapped-list") {
+            guard let a = try sec.select("h2 a, h3 a, .title a").first() else { continue }
+            let href = try a.attr("href")
+            guard let u = Validate.resolve(href) else { continue }
+            let count = try sec.select(".value, .content-metadata").first().flatMap { int(try $0.text()) }
+            let blurb = try sec.select(".body-text p, .notes").first()?.text()
+            out.append(ListSummary(title: try a.text(), url: u, filmCount: count, blurb: blurb))
+        }
+        return Page(items: out, page: page, hasNext: !(try doc.select("a.next").isEmpty()))
+    }
+
+    // MARK: members
+    public static func members(html: String, page: Int) throws -> Page<MemberSummary> {
+        let doc = try SwiftSoup.parse(html, "https://letterboxd.com/")
+        var out: [MemberSummary] = []
+        for p in try doc.select(".person-summary") {
+            guard let a = try p.select("a.name").first() else { continue }
+            let href = try a.attr("href").trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+            guard let u = try? Validate.username(href) else { continue }
+            out.append(MemberSummary(username: u, displayName: try a.text(), avatarURL: URL(string: try p.select("img").first()?.attr("src") ?? "")))
+        }
+        return Page(items: out, page: page, hasNext: !(try doc.select("a.next").isEmpty()))
+    }
+
+    /// Film poster from a film page's og:image (used lazily for grid items).
+    public static func ogImage(html: String) -> URL? {
+        guard let doc = try? SwiftSoup.parse(html), let c = try? doc.select("meta[property=og:image]").first()?.attr("content") else { return nil }
+        return URL(string: c).flatMap { try? Validate.url($0) }
+    }
+}
+
+// MARK: RSS (diary / reviews / lists)
+public final class RSSParser: NSObject, XMLParserDelegate {
+    private var items: [[String: String]] = []
+    private var cur: [String: String]? = nil
+    private var text = ""
+    public static func parse(_ data: Data) throws -> [ActivityEntry] {
+        let p = RSSParser(); let x = XMLParser(data: data); x.delegate = p
+        guard x.parse() else { throw LetterboxdError.parse("RSS xml: \(x.parserError?.localizedDescription ?? "invalid")") }
+        let df = DateFormatter(); df.locale = Locale(identifier: "en_US_POSIX"); df.dateFormat = "yyyy-MM-dd"; df.timeZone = TimeZone(identifier: "UTC")
+        return p.items.compactMap { d in
+            guard let l = d["link"], let u = URL(string: l), (try? Validate.url(u)) != nil else { return nil }
+            let title = d["letterboxd:filmTitle"] ?? d["title"] ?? ""
+            var poster: URL? = nil
+            var review: String? = nil
+            if let html = d["description"], let doc = try? SwiftSoup.parse(html) {
+                if let s = try? doc.select("img").first()?.attr("src"), let pu = URL(string: s), (try? Validate.url(pu)) != nil { poster = pu }
+                let ps = (try? doc.select("p").array().map { try $0.text() }) ?? []
+                let body = ps.filter { !$0.hasPrefix("Watched on") && !$0.isEmpty }.joined(separator: "\n\n")
+                review = body.isEmpty || body == "Watched on" ? nil : body
+            }
+            return ActivityEntry(link: u, filmTitle: title, filmYear: d["letterboxd:filmYear"].flatMap(Int.init),
+                                 rating: d["letterboxd:memberRating"].flatMap(Double.init),
+                                 watchedDate: d["letterboxd:watchedDate"].flatMap(df.date(from:)),
+                                 rewatch: d["letterboxd:rewatch"] == "Yes", review: review, posterURL: poster,
+                                 isListEntry: d["guid"]?.hasPrefix("letterboxd-list") == true)
+        }
+    }
+    public func parser(_ parser: XMLParser, didStartElement e: String, namespaceURI: String?, qualifiedName q: String?, attributes a: [String: String] = [:]) {
+        if e == "item" { cur = [:] }; text = ""
+    }
+    public func parser(_ parser: XMLParser, foundCharacters s: String) { text += s }
+    public func parser(_ parser: XMLParser, foundCDATA b: Data) { text += String(decoding: b, as: UTF8.self) }
+    public func parser(_ parser: XMLParser, didEndElement e: String, namespaceURI: String?, qualifiedName q: String?) {
+        if e == "item", let c = cur { items.append(c); cur = nil; return }
+        if cur != nil { cur?[q ?? e] = text.trimmingCharacters(in: .whitespacesAndNewlines) }
+    }
+}
