@@ -1,16 +1,16 @@
 import XCTest
 @testable import LetterboxdKit
 
-actor Rec { var reqs: [WriteRequest] = []; var onList = false; var ignorePatch = false
-    func add(_ r: WriteRequest) { reqs.append(r); if r.method == "PATCH", !ignorePatch { onList = String(decoding: r.body, as: UTF8.self).contains("true") } }
+actor Rec { var reqs: [WriteRequest] = []; var onList = false; var liked = false; var ignorePatch = false
+    func add(_ r: WriteRequest) { reqs.append(r); if r.method == "POST" { liked = String(decoding: r.body, as: UTF8.self).contains("liked=true") }; if r.method == "PATCH", !ignorePatch { onList = String(decoding: r.body, as: UTF8.self).contains("true") } }
     func all() -> [WriteRequest] { reqs }; func setIgnore() { ignorePatch = true } }
 struct WT: HTTPTransport {
     let rec: Rec; let status: Int; let likeJSON: String
     func get(_ url: URL, accept: String) async throws -> HTTPResult {
-        if url.path.contains("watchlist") {
-            let on = await rec.onList
-            let h = on ? #"<li><div data-item-slug="fight-club" data-item-name="T (2000)"></div></li>"# : ""
-            return HTTPResult(data: Data("<html><body><ul>\(h)</ul></body></html>".utf8), status: 200) }
+        if url.path == "/s/check-viewingable-relation" {
+            XCTAssertEqual(url.query, "viewingableUID=film:51568")
+            let on = await rec.onList, lk = await rec.liked
+            return HTTPResult(data: Data(#"{"result":true,"csrf":"n","liked":\#(lk),"rating":0,"isInWatchlist":\#(on),"isDerivedRating":false}"#.utf8), status: 200) }
         return HTTPResult(data: Data(#"{"result":true,"csrf":"TOK+/=","lid":"2a9q","id":51568,"slug":"x"}"#.utf8), status: 200)
     }
     func send(_ r: WriteRequest) async throws -> HTTPResult { await rec.add(r); return HTTPResult(data: Data((r.method == "PATCH" ? "{}" : likeJSON).utf8), status: status) }
@@ -38,6 +38,18 @@ final class WriteTests: XCTestCase {
         let (f, rec) = actions(auth()); await rec.setIgnore()
         let h = FilmHandle(slug: "fight-club", lid: "2a9q", id: 51568, csrf: "c")
         do { try await f.setWatchlist(h, on: true); XCTFail("200 {} without server state must not count") } catch { XCTAssertTrue("\(error)".contains("readback")) }
+    }
+    func testClientProtocolReturnsServerState() async throws {
+        let (f, _) = actions(auth()); let c: FilmActionsClient = f
+        let r938 = try await c.state(slug: "fight-club"); XCTAssertEqual(r938, FilmState(watchlist: false, liked: false))
+        let r874 = try await c.setWatchlist(slug: "fight-club", on: true); XCTAssertEqual(r874, FilmState(watchlist: true, liked: false))
+        let r103 = try await c.setLike(slug: "fight-club", liked: true); XCTAssertEqual(r103, FilmState(watchlist: true, liked: true))
+        let r240 = try await c.setWatchlist(slug: "fight-club", on: false); XCTAssertEqual(r240, FilmState(watchlist: false, liked: true))
+    }
+    func testRelationRejectsMalformed() async throws {
+        struct Bad: HTTPTransport { func get(_ u: URL, accept: String) async throws -> HTTPResult { HTTPResult(data: Data(#"{"result":true}"#.utf8), status: 200) } }
+        let f = FilmActions(transport: Bad(), auth: auth())
+        do { _ = try await f.relation(FilmHandle(slug: "a", lid: "x", id: 1, csrf: "c")); XCTFail() } catch { XCTAssertEqual(error as? LetterboxdError, .parse("relation")) }
     }
     func testLikeWireFormatEncodesCSRF() async throws {
         let (f, rec) = actions(auth()); let h = try await f.handle(slug: "fight-club")

@@ -15,8 +15,8 @@ enum Theme {
 final class AppEnvironment {
     let service: LetterboxdService
     let auth: AuthAuthority
-    /// Watchlist/like client; nil in the UI-test host (no network writes there).
-    var actions: FilmActions? = nil
+    /// Watchlist/like client. Production: FilmActions. UI-test host injects a mock of the same protocol.
+    var actions: FilmActionsClient? = nil
     /// Member being viewed; set only from a server-validated session (empty while signed out, never shown then).
     private(set) var username = ""
     /// The only writer: bound to the validated session (see AccountModel.onUsernameChange). No manual override exists.

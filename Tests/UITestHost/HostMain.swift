@@ -11,6 +11,9 @@ struct HostApp: App {
         let sc = Scenario(ProcessInfo.processInfo.arguments)
         let auth = AuthAuthority()
         let e = AppEnvironment(service: MockService(sc), auth: auth)
+        let a = ProcessInfo.processInfo.arguments
+        let wm = a.firstIndex(of: "-WriteMode").flatMap { a.indices.contains($0 + 1) ? a[$0 + 1] : nil }.flatMap(MockFilmActions.Mode.init(rawValue:)) ?? .ok
+        e.actions = MockFilmActions(mode: wm, auth: auth)
         let store = InMemorySessionStore()
         if sc.storedSession { try? store.save(Session(username: "tester", cookies: [WebCookie(name: "letterboxd.user.CURRENT", value: "v", domain: "letterboxd.com")])) }
         let counter = Counter()

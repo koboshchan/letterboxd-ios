@@ -36,6 +36,17 @@ extension URLSessionTransport {
 }
 
 public struct FilmHandle: Sendable, Equatable { public let slug: String, lid: String, id: Int, csrf: String }
+public struct FilmState: Sendable, Equatable { public let watchlist: Bool, liked: Bool
+    public init(watchlist: Bool, liked: Bool) { self.watchlist = watchlist; self.liked = liked } }
+
+/// What the film screen talks to. FilmActions is the production implementation; the UI-test host injects a mock.
+/// Every call returns state the SERVER confirmed, or throws (including when the outcome could not be confirmed).
+public protocol FilmActionsClient: Sendable {
+    func state(slug: String) async throws -> FilmState
+    func setWatchlist(slug: String, on: Bool) async throws -> FilmState
+    func setLike(slug: String, liked: Bool) async throws -> FilmState
+}
+
 public struct LikeResult: Sendable, Equatable { public let liked: Bool, count: Int? }
 
 /// Watchlist and like, built ONLY from the captured wire format:
@@ -73,7 +84,6 @@ public final class FilmActions: Sendable {
         }
     }
     public func setWatchlist(_ f: FilmHandle, on: Bool) async throws {
-        guard let member = auth.username else { throw AuthError.notSignedIn }
         try await guarded { g in
             try Task.checkCancellation()
             let u = URL(string: "https://letterboxd.com/api/v0/me/watchlist/\(f.lid)")!
@@ -82,23 +92,20 @@ public final class FilmActions: Sendable {
             try check(r)
             guard auth.generation == g else { throw LetterboxdError.cancelled }
             // PATCH answers 200 {} which proves nothing: read the server's watchlist back and require the target state.
-            guard try await watchlistContains(f.slug, member: member) == on else { throw LetterboxdError.parse("watchlist readback mismatch") }
+            guard try await relation(f).watchlist == on else { throw LetterboxdError.parse("watchlist readback mismatch") }
         }
     }
-    /// Reads the signed-in member's watchlist pages (plain authenticated GET, uncached) for the film. Bounded; an
-    /// unfinished scan is an error, never a guess.
-    func watchlistContains(_ slug: String, member: String) async throws -> Bool {
-        let name = try Validate.username(member)
-        for page in 1...25 {
-            try Task.checkCancellation()
-            let path = page == 1 ? "watchlist/" : "watchlist/page/\(page)/"
-            let r = try await transport.get(try Validate.url(URL(string: "https://letterboxd.com/\(name)/\(path)")!), accept: "text/html")
-            try check(r)
-            let p = try Parsers.filmGrid(html: String(decoding: r.data, as: UTF8.self), page: page)
-            if p.items.contains(where: { $0.slug == slug }) { return true }
-            if !p.hasNext { return false }
-        }
-        throw LetterboxdError.parse("watchlist too long to verify")
+    /// Authoritative current state: GET /s/check-viewingable-relation?viewingableUID=film:{id}
+    /// (captured: 200, JSON with liked, rating, isInWatchlist, isDerivedRating). The uid value is the film JSON's "uid",
+    /// which equals film:{id}.
+    public func relation(_ f: FilmHandle) async throws -> FilmState {
+        var c = URLComponents(string: "https://letterboxd.com/s/check-viewingable-relation")!
+        c.queryItems = [URLQueryItem(name: "viewingableUID", value: "film:\(f.id)")]
+        let r = try await transport.get(try Validate.url(c.url!), accept: "application/json")
+        try check(r)
+        guard let j = try JSONSerialization.jsonObject(with: r.data) as? [String: Any], j["result"] as? Bool == true,
+              let w = j["isInWatchlist"] as? Bool, let l = j["liked"] as? Bool else { throw LetterboxdError.parse("relation") }
+        return FilmState(watchlist: w, liked: l)
     }
     public func setLike(_ f: FilmHandle, liked: Bool) async throws -> LikeResult {
         try await guarded { _ in
@@ -112,5 +119,24 @@ public final class FilmActions: Sendable {
             else { throw LetterboxdError.parse("like response") }
             return LikeResult(liked: l, count: j["count"] as? Int)
         }
+    }
+}
+
+extension FilmActions: FilmActionsClient {
+    public func state(slug: String) async throws -> FilmState {
+        let h = try await handle(slug: slug)
+        return try await guarded { _ in try await relation(h) }
+    }
+    public func setWatchlist(slug: String, on: Bool) async throws -> FilmState {
+        let h = try await handle(slug: slug)
+        try await setWatchlist(h, on: on)
+        return try await guarded { _ in try await relation(h) }
+    }
+    public func setLike(slug: String, liked: Bool) async throws -> FilmState {
+        let h = try await handle(slug: slug)
+        _ = try await setLike(h, liked: liked)
+        let st = try await guarded { _ in try await relation(h) }
+        guard st.liked == liked else { throw LetterboxdError.parse("like readback mismatch") }
+        return st
     }
 }
