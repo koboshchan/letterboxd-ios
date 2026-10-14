@@ -12,7 +12,7 @@ struct LetterboxdApp: App {
                 .environment(account)
                 .preferredColorScheme(.dark)
                 .tint(Theme.green)
-                .task { await account.restore() }
+                .task { account.auth = env.auth; await account.restore() }
         }
     }
 }
@@ -30,16 +30,18 @@ enum Theme {
 final class AppEnvironment {
     let service: LetterboxdService
     let isFixtureMode: Bool
-    var username = "koboshchan"
+    let auth: AuthAuthority
+    static let defaultUsername = "koboshchan"
+    var username = AppEnvironment.defaultUsername
     /// Launch-argument hooks for deterministic screenshots only (-UITab N, -UISegment N, -UIFilm slug).
     static func arg(_ k: String) -> String? { let a = ProcessInfo.processInfo.arguments; return a.firstIndex(of: k).flatMap { a.indices.contains($0 + 1) ? a[$0 + 1] : nil } }
-    init(service: LetterboxdService, fixture: Bool) { self.service = service; self.isFixtureMode = fixture }
+    init(service: LetterboxdService, fixture: Bool, auth: AuthAuthority = AuthAuthority()) { self.service = service; self.isFixtureMode = fixture; self.auth = auth }
     static func make() -> AppEnvironment {
         if ProcessInfo.processInfo.arguments.contains("-UIFixtureMode") { return AppEnvironment(service: FixtureService(), fixture: true) }
-        let store = KeychainSessionStore()
-        // Signed-in reads: the stored (server-validated) session cookie goes only to https://letterboxd.com.
-        let transport = URLSessionTransport(cookieHeader: { (try? store.load())?.header() })
-        return AppEnvironment(service: PublicWebService(fetcher: Fetcher(transport: transport)), fixture: false)
+        // Credentials come only from the in-memory, server-validated AuthAuthority (never read raw from the Keychain).
+        let auth = AuthAuthority()
+        let transport = URLSessionTransport(cookieHeader: { auth.cookieHeader() })
+        return AppEnvironment(service: PublicWebService(fetcher: Fetcher(transport: transport, auth: auth)), fixture: false, auth: auth)
     }
 }
 
@@ -57,7 +59,8 @@ struct RootView: View {
             Tab("About", systemImage: "info.circle", value: 3) { NavigationStack { AboutScreen() } }
         }
         .background(Color.black)
-        .onChange(of: account.username) { _, u in if let u { env.username = u } }
+        // Any auth change (including logout to nil) resets the viewed username and rebuilds all loaded models.
+        .onChange(of: account.username) { _, u in env.username = u ?? AppEnvironment.defaultUsername }
         .sheet(isPresented: $showSignIn) { SignInScreen() }
     }
 }

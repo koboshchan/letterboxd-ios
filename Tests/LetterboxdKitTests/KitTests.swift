@@ -1,4 +1,7 @@
 import XCTest
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 @testable import LetterboxdKit
 
 func fixture(_ n: String, _ e: String) throws -> Data {
@@ -270,3 +273,109 @@ final class SignInTests: XCTestCase {
     }
 }
 actor SeenURLs { var all: [URL] = []; func add(_ u: URL) { all.append(u) } }
+
+final class AuthTransportTests: XCTestCase {
+    func testAuthGenerationIsolatesCacheAndDropsInflight() async throws {
+        let auth = AuthAuthority(); let u = URL(string: "https://letterboxd.com/a/")!
+        let seenCookies = SeenBox()
+        let tr = StubTransport { _ in await seenCookies.add(auth.cookieHeader() ?? "none"); return HTTPResult(data: Data((auth.username ?? "guest").utf8), status: 200) }
+        let f = Fetcher(transport: tr, auth: auth)
+        let c = WebCookie(name: "letterboxd.user.CURRENT", value: "v", domain: "letterboxd.com", expires: Date().addingTimeInterval(9999))
+        let r0 = try await f.text(u); XCTAssertEqual(r0, "guest")
+        auth.setValidated(Session(username: "A", cookies: [c]))
+        let r1 = try await f.text(u); XCTAssertEqual(r1, "A")            // not the cached guest page
+        auth.setValidated(Session(username: "B", cookies: [c]))
+        let r2 = try await f.text(u); XCTAssertEqual(r2, "B")            // not A's page
+        auth.revoke()
+        let r3 = try await f.text(u); XCTAssertEqual(r3, "guest")        // logout: no private data, no cookie
+        let seen = await seenCookies.all
+        XCTAssertEqual(seen.last, "none"); XCTAssertNil(auth.cookieHeader())
+    }
+    func testResponseStartedBeforeLogoutIsDiscardedAndNotCached() async throws {
+        let auth = AuthAuthority(); let u = URL(string: "https://letterboxd.com/p/")!
+        let c = WebCookie(name: "letterboxd.user.CURRENT", value: "v", domain: "letterboxd.com", expires: Date().addingTimeInterval(9999))
+        auth.setValidated(Session(username: "A", cookies: [c]))
+        let f = Fetcher(transport: StubTransport { _ in auth.revoke(); return HTTPResult(data: Data("private-A".utf8), status: 200) }, auth: auth)
+        do { _ = try await f.text(u); XCTFail("should be discarded") } catch LetterboxdError.cancelled {} 
+        let cached = await f.cache.get(u, partition: auth.generation); XCTAssertNil(cached)
+        let cachedOld = await f.cache.get(u, partition: auth.generation - 1); XCTAssertNil(cachedOld)
+    }
+    func testNoCookieWithoutValidation() {
+        let auth = AuthAuthority()
+        XCTAssertNil(auth.cookieHeader())   // fresh/offline-unvalidated: nothing is sent
+        let c = WebCookie(name: "a", value: "b", domain: "letterboxd.com", expires: Date(timeIntervalSince1970: 1))
+        auth.setValidated(Session(username: "u", cookies: [c])); XCTAssertNil(auth.cookieHeader())   // expired cookies excluded
+    }
+    func testRedirectPolicyCases() {
+        let ok = URL(string: "https://letterboxd.com/a/")!
+        XCTAssertTrue(RedirectPolicy.mayCarryCredentials(ok))
+        for s in ["https://www.letterboxd.com/", "http://letterboxd.com/", "https://letterboxd.com:8443/", "https://evil.com/", "https://letterboxd.com.evil.com/", "https://u:p@letterboxd.com/", "https://sub.letterboxd.com/"] {
+            XCTAssertFalse(RedirectPolicy.mayCarryCredentials(URL(string: s)!), s)
+        }
+        for s in [ok.absoluteString, "https://www.letterboxd.com/x", "https://letterboxd.com:443/x"] {
+            XCTAssertFalse(RedirectPolicy.allows(to: URL(string: s)!, authenticated: true), s)
+            XCTAssertTrue(RedirectPolicy.allows(to: URL(string: s)!, authenticated: false), s)
+        }
+        for s in ["http://letterboxd.com/", "https://letterboxd.com:8443/", "https://evil.com/", "https://letterboxd.com.evil.com/", "https://u:p@letterboxd.com/"] {
+            XCTAssertFalse(RedirectPolicy.allows(to: URL(string: s)!, authenticated: false), s)
+        }
+    }
+    /// Real URLSession with a local URLProtocol that answers with a redirect; checks cookie never reaches the target.
+    func testRedirectGuardDelegateDirect() async {
+        let task = URLSession.shared.dataTask(with: URL(string: "https://letterboxd.com/start/")!)
+        for code in [301, 302, 303, 307, 308] {
+            let resp = HTTPURLResponse(url: URL(string: "https://letterboxd.com/start/")!, statusCode: code, httpVersion: nil, headerFields: nil)!
+            var n = URLRequest(url: URL(string: "https://letterboxd.com/other/")!); n.setValue("letterboxd.user.CURRENT=s", forHTTPHeaderField: "Cookie"); n.setValue("Bearer x", forHTTPHeaderField: "Authorization")
+            let auth = await RedirectGuard(authenticated: true).urlSession(.shared, task: task, willPerformHTTPRedirection: resp, newRequest: n)
+            XCTAssertNil(auth, "authenticated \(code) must be refused even same-site")
+            let anon = await RedirectGuard(authenticated: false).urlSession(.shared, task: task, willPerformHTTPRedirection: resp, newRequest: n)
+            XCTAssertNotNil(anon); XCTAssertNil(anon?.value(forHTTPHeaderField: "Cookie")); XCTAssertNil(anon?.value(forHTTPHeaderField: "Authorization"))
+            for bad in ["https://evil.com/", "http://letterboxd.com/", "https://letterboxd.com:8443/", "https://letterboxd.com.evil.com/"] {
+                let x = await RedirectGuard(authenticated: false).urlSession(.shared, task: task, willPerformHTTPRedirection: resp, newRequest: URLRequest(url: URL(string: bad)!))
+                XCTAssertNil(x, bad)
+            }
+        }
+    }
+    #if !canImport(FoundationNetworking)
+    func testAuthenticatedRequestNeverFollowsRedirects() async throws {
+        for code in [301, 302, 307, 308] {
+            RedirectStub.seen = []; RedirectStub.code = code
+            let c = URLSessionConfiguration.ephemeral; c.protocolClasses = [RedirectStub.self]
+            let t = URLSessionTransport(configuration: c, cookieHeader: { "letterboxd.user.CURRENT=secret" })
+            let r = try await t.get(URL(string: "https://letterboxd.com/start/")!, accept: "text/html")
+            XCTAssertEqual(r.status, code)
+            XCTAssertEqual(RedirectStub.seen.map { $0.url!.absoluteString }, ["https://letterboxd.com/start/"])
+            XCTAssertEqual(RedirectStub.seen.first?.value(forHTTPHeaderField: "Cookie"), "letterboxd.user.CURRENT=secret")
+        }
+        // Unauthenticated redirect to another host is refused too; same-site exact host is followed without cookies.
+        RedirectStub.seen = []; RedirectStub.code = 302; RedirectStub.target = "https://evil.com/x"
+        let c = URLSessionConfiguration.ephemeral; c.protocolClasses = [RedirectStub.self]
+        let r = try await URLSessionTransport(configuration: c).get(URL(string: "https://letterboxd.com/start/")!, accept: "text/html")
+        XCTAssertEqual(r.status, 302); XCTAssertEqual(RedirectStub.seen.count, 1)
+        RedirectStub.target = "https://letterboxd.com/other/"
+    }
+    #endif
+}
+
+actor SeenBox { var all: [String] = []; func add(_ s: String) { all.append(s) } }
+
+final class RedirectStub: URLProtocol, @unchecked Sendable {
+    nonisolated(unsafe) static var seen: [URLRequest] = []
+    nonisolated(unsafe) static var code = 302
+    nonisolated(unsafe) static var target = "https://evil.com/steal"
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func startLoading() {
+        Self.seen.append(request)
+        if request.url!.host == "letterboxd.com", request.url!.path == "/start/" {
+            let resp = HTTPURLResponse(url: request.url!, statusCode: Self.code, httpVersion: nil, headerFields: ["Location": Self.target])!
+            var n = URLRequest(url: URL(string: Self.target)!); n.httpMethod = "GET"
+            for (k, v) in request.allHTTPHeaderFields ?? [:] { n.setValue(v, forHTTPHeaderField: k) }
+            client?.urlProtocol(self, wasRedirectedTo: n, redirectResponse: resp)
+        } else {
+            client?.urlProtocol(self, didReceive: HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, cacheStoragePolicy: .notAllowed)
+            client?.urlProtocol(self, didLoad: Data()); client?.urlProtocolDidFinishLoading(self)
+        }
+    }
+    override func stopLoading() {}
+}

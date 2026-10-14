@@ -22,6 +22,7 @@ public final class PublicWebService: LetterboxdService {
     let fetcher: Fetcher
     let base = URL(string: "https://letterboxd.com")!
     public init(fetcher: Fetcher = Fetcher()) { self.fetcher = fetcher }
+    public var auth: AuthAuthority { fetcher.auth }
 
     private func url(_ parts: [String], page: Int = 1, query: [URLQueryItem] = []) -> URL {
         var u = base

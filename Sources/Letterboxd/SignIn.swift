@@ -11,6 +11,10 @@ final class AccountModel {
     var failure: String?
     /// True until the first server validation of any stored session finishes; UI must not show a stored name as signed in.
     var validating = true
+    /// Bumped on every auth state change; the root view is rebuilt on it so no model keeps previous-account data.
+    private(set) var epoch = 0
+    /// Set by the app before restore(); the only holder of credentials used for requests.
+    var auth: AuthAuthority?
     /// The web view's data store. Owned here so sign-out clears the store actually used.
     private(set) var webStore = WKWebsiteDataStore.nonPersistent()
     init(store: SessionStore = KeychainSessionStore()) {
@@ -19,19 +23,24 @@ final class AccountModel {
     /// Restores a stored session only after cookie attributes and the server both confirm it.
     func restore() async {
         defer { validating = false }
-        do { username = try await service.restore(fetch: Self.fetchHomepage)?.username } catch { username = nil }  // unreachable server: not shown as signed in until validated
+        do {
+            if let s = try await service.restore(fetch: Self.fetchHomepage) { auth?.setValidated(s); username = s.username }
+            else { auth?.revoke(); username = nil }
+        } catch { auth?.revoke(); username = nil }  // unverifiable (e.g. offline): no credentials sent until validated
+        epoch += 1
     }
     func complete(with cookies: [HTTPCookie]) async -> Bool {
         let mapped = cookies.map { WebCookie(name: $0.name, value: $0.value, domain: $0.domain, path: $0.path, expires: $0.expiresDate, secure: $0.isSecure) }
         do {
             let s = try await service.complete(cookies: mapped, fetch: Self.fetchHomepage)
-            username = s.username; failure = nil; return true
+            auth?.setValidated(s); username = s.username; failure = nil; epoch += 1; return true
         } catch { failure = "Letterboxd did not confirm a signed-in account yet. Finish signing in on the page, then tap Done."; return false }
     }
     /// Removes the Keychain session and any web data left for the site.
     func signOut() async {
-        do { try await service.signOut() } catch { failure = "Could not remove the stored session."; return }
-        username = nil
+        auth?.revoke()   // first: stops credentials immediately and invalidates in-flight responses
+        username = nil; epoch += 1
+        do { try await service.signOut() } catch { failure = "Could not remove the stored session." }
         let ds = webStore
         let recs = await ds.dataRecords(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes())
         await ds.removeData(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(), for: recs.filter { $0.displayName == "letterboxd.com" })

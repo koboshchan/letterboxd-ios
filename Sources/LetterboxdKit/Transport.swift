@@ -11,27 +11,57 @@ public protocol HTTPTransport: Sendable {
     func get(_ url: URL, accept: String) async throws -> HTTPResult
 }
 
+/// Redirect policy. Authenticated requests (carrying a Cookie) never follow ANY redirect, including 307/308, so
+/// credentials cannot leave the original request; the 3xx is returned to the caller as an error status.
+/// Unauthenticated requests may follow a redirect only to exact https letterboxd.com / www.letterboxd.com on port 443.
+public enum RedirectPolicy {
+    public static func isExactSiteURL(_ u: URL) -> Bool {
+        u.scheme == "https" && (u.host == "letterboxd.com" || u.host == "www.letterboxd.com")
+            && (u.port == nil || u.port == 443) && u.user == nil && u.password == nil
+    }
+    public static func allows(to new: URL, authenticated: Bool) -> Bool { !authenticated && isExactSiteURL(new) }
+    /// The only URL an authenticated request may target: exact https://letterboxd.com on the default port.
+    public static func mayCarryCredentials(_ u: URL) -> Bool {
+        u.scheme == "https" && u.host == "letterboxd.com" && (u.port == nil || u.port == 443) && u.user == nil && u.password == nil
+    }
+}
+final class RedirectGuard: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
+    let authenticated: Bool
+    init(authenticated: Bool) { self.authenticated = authenticated }
+    func urlSession(_ s: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse, newRequest: URLRequest) async -> URLRequest? {
+        guard let u = newRequest.url, RedirectPolicy.allows(to: u, authenticated: authenticated) else { return nil }
+        var r = newRequest
+        for h in ["Cookie", "Authorization", "X-CSRF-Token", "X-Requested-With"] { r.setValue(nil, forHTTPHeaderField: h) }
+        return r
+    }
+}
+
 public struct URLSessionTransport: HTTPTransport {
-    private let session: URLSession
+    private let configuration: URLSessionConfiguration
     private let cookieHeader: (@Sendable () -> String?)?
     /// cookieHeader (optional) is attached ONLY to https://letterboxd.com requests, for the signed-in account.
-    public init(session: URLSession? = nil, cookieHeader: (@Sendable () -> String?)? = nil) {
+    public init(configuration: URLSessionConfiguration? = nil, cookieHeader: (@Sendable () -> String?)? = nil) {
         self.cookieHeader = cookieHeader
-        if let session { self.session = session; return }
-        let c = URLSessionConfiguration.ephemeral
+        let c = configuration ?? URLSessionConfiguration.ephemeral
         c.timeoutIntervalForRequest = 20
         c.httpCookieStorage = nil
         c.httpShouldSetCookies = false
-        self.session = URLSession(configuration: c)
+        self.configuration = c
     }
     public func get(_ url: URL, accept: String) async throws -> HTTPResult {
         var r = URLRequest(url: try Validate.url(url))
         r.httpMethod = "GET"
         r.setValue(accept, forHTTPHeaderField: "Accept")
-        if let h = cookieHeader?(), !h.isEmpty, r.url?.host == "letterboxd.com" { r.setValue(h, forHTTPHeaderField: "Cookie") }
+        var authenticated = false
+        if let h = cookieHeader?(), !h.isEmpty, let u = r.url, RedirectPolicy.mayCarryCredentials(u) { r.setValue(h, forHTTPHeaderField: "Cookie"); authenticated = true }
         r.setValue("LetterboxdReader/0.1 (read-only personal client; user-triggered)", forHTTPHeaderField: "User-Agent")
         do {
-            let (d, resp) = try await session.data(for: r)
+            let (d, resp) = try await { () async throws -> (Data, URLResponse) in
+                // Session-level delegate (per request): redirect handling is enforced on every platform.
+                let s = URLSession(configuration: configuration, delegate: RedirectGuard(authenticated: authenticated), delegateQueue: nil)
+                defer { s.finishTasksAndInvalidate() }
+                return try await s.data(for: r)
+            }()
             return HTTPResult(data: d, status: (resp as? HTTPURLResponse)?.statusCode ?? 0)
         } catch is CancellationError { throw LetterboxdError.cancelled
         } catch let e as URLError where e.code == .cancelled { throw LetterboxdError.cancelled
@@ -53,33 +83,60 @@ public enum BlockDetector {
 /// Small TTL cache with in-flight de-duplication so repeated taps never re-request.
 public actor ResponseCache {
     private struct Entry { let data: Data; let at: Date }
-    private var store: [URL: Entry] = [:]
+    private struct Key: Hashable { let url: URL; let partition: Int }
+    private var store: [Key: Entry] = [:]
     private let ttl: TimeInterval
     private let now: @Sendable () -> Date
     public init(ttl: TimeInterval = 300, now: @escaping @Sendable () -> Date = { Date() }) { self.ttl = ttl; self.now = now }
-    public func get(_ u: URL) -> Data? {
-        guard let e = store[u], now().timeIntervalSince(e.at) < ttl else { store[u] = nil; return nil }
+    public func get(_ u: URL, partition: Int = 0) -> Data? {
+        let k = Key(url: u, partition: partition)
+        guard let e = store[k], now().timeIntervalSince(e.at) < ttl else { store[k] = nil; return nil }
         return e.data
     }
-    public func set(_ u: URL, _ d: Data) { store[u] = Entry(data: d, at: now()) }
+    public func set(_ u: URL, _ d: Data, partition: Int = 0) { store[Key(url: u, partition: partition)] = Entry(data: d, at: now()) }
     public func clear() { store.removeAll() }
+}
+
+/// The ONLY source of credentials for requests. Holds the in-memory, server-validated session (never the raw Keychain).
+/// Every change (sign-in, restore, sign-out, revoke) bumps `generation`; caches are partitioned by it and any response
+/// that started under an older generation is discarded, so nothing from a previous account state is cached or shown.
+public final class AuthAuthority: @unchecked Sendable {
+    private let lock = NSLock()
+    private var session: Session?
+    private var gen = 0
+    public init() {}
+    public var generation: Int { lock.lock(); defer { lock.unlock() }; return gen }
+    public var username: String? { lock.lock(); defer { lock.unlock() }; return session?.username }
+    /// Call only after the server confirmed this session.
+    public func setValidated(_ s: Session) { lock.lock(); session = s; gen += 1; lock.unlock() }
+    public func revoke() { lock.lock(); session = nil; gen += 1; lock.unlock() }
+    /// Cookie header or nil (nil = send no credentials). Expired cookies are never included.
+    public func cookieHeader(now: Date = Date()) -> String? {
+        lock.lock(); defer { lock.unlock() }
+        guard let h = session?.header(now: now), !h.isEmpty else { return nil }
+        return h
+    }
 }
 
 public final class Fetcher: Sendable {
     let transport: HTTPTransport
     let cache: ResponseCache
-    public init(transport: HTTPTransport = URLSessionTransport(), cache: ResponseCache = ResponseCache()) {
-        self.transport = transport; self.cache = cache
+    let auth: AuthAuthority
+    public init(transport: HTTPTransport = URLSessionTransport(), cache: ResponseCache = ResponseCache(), auth: AuthAuthority = AuthAuthority()) {
+        self.transport = transport; self.cache = cache; self.auth = auth
     }
     /// forceRefresh is used by pull-to-refresh (a user action) and bypasses the cache.
     public func text(_ url: URL, accept: String = "text/html", forceRefresh: Bool = false) async throws -> String {
         try Task.checkCancellation()
         let u = try Validate.url(url)
-        if !forceRefresh, let d = await cache.get(u) { return String(decoding: d, as: UTF8.self) }
+        let g = auth.generation
+        if !forceRefresh, let d = await cache.get(u, partition: g) { return String(decoding: d, as: UTF8.self) }
         let r = try await transport.get(u, accept: accept)
         try Task.checkCancellation()
+        // Auth state changed while in flight: drop the response, never cache or render it.
+        guard auth.generation == g else { throw LetterboxdError.cancelled }
         try BlockDetector.check(r)
-        await cache.set(u, r.data)
+        await cache.set(u, r.data, partition: g)
         return String(decoding: r.data, as: UTF8.self)
     }
 }
