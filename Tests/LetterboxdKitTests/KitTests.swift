@@ -34,6 +34,16 @@ final class KitTests: XCTestCase {
         XCTAssertNil(d.cast.last?.url, "off-site person links are dropped")
         XCTAssertEqual(d.averageRating, 4.52); XCTAssertEqual(d.tagline, "Act like you own the place.")
     }
+    func testBackdropParsedFromRealElementShape() throws {
+        let base = try fixtureText("film", "html")
+        let el = #"<div id="backdrop" class="backdrop-wrapper" data-backdrop="https://a.ltrbxd.com/resized/sm/upload/oi/ha/78/z8/parasite-1200-1200-675-675-crop-000000.jpg?v=03b9da4410" data-backdrop2x="https://a.ltrbxd.com/resized/sm/upload/oi/ha/78/z8/parasite-1920-1920-1080-1080-crop-000000.jpg?v=03b9da4410" data-backdrop-mobile="https://a.ltrbxd.com/x-960.jpg"></div>"#
+        let d = try Parsers.filmDetail(html: base.replacingOccurrences(of: "<body", with: "<body>" + el + "<i", options: [], range: base.range(of: "<body")), slug: "parasite-2019")
+        XCTAssertEqual(d.backdropURL?.absoluteString.contains("1920-1920"), true)
+        let hostile = el.replacingOccurrences(of: "a.ltrbxd.com", with: "evil.example")
+        let h = try Parsers.filmDetail(html: base.replacingOccurrences(of: "<body", with: "<body>" + hostile + "<i", options: [], range: base.range(of: "<body")), slug: "parasite-2019")
+        XCTAssertNil(h.backdropURL, "off-host backdrop rejected")
+        XCTAssertNil(try Parsers.filmDetail(html: base, slug: "parasite-2019").backdropURL, "no backdrop element -> nil")
+    }
     func testFilmDetailMissingJSONLDThrows() {
         XCTAssertThrowsError(try Parsers.filmDetail(html: "<html></html>", slug: "x"))
     }

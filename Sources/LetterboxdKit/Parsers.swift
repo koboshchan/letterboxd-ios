@@ -73,7 +73,17 @@ public enum Parsers {
         return FilmDetail(slug: slug, title: title, year: year, tagline: tagline, synopsis: blurb,
                           posterURL: (j["image"] as? String).flatMap(URL.init(string:)).flatMap { try? Validate.url($0) },
                           runtimeMinutes: minutes, directors: people("director"), cast: people("actor"),
-                          genres: (j["genre"] as? [String]) ?? [], averageRating: avg, ratingCount: cnt)
+                          genres: (j["genre"] as? [String]) ?? [], averageRating: avg, ratingCount: cnt,
+                          backdropURL: backdrop(doc))
+    }
+
+    /// Real film pages carry <div id="backdrop" data-backdrop-mobile=... data-backdrop=...>. Only https a.ltrbxd.com-style hosts pass Validate.url.
+    static func backdrop(_ doc: Document) -> URL? {
+        guard let el = try? doc.select("#backdrop").first() else { return nil }
+        for k in ["data-backdrop2x", "data-backdrop", "data-backdrop-mobile"] {
+            if let v = try? el.attr(k), !v.isEmpty, let u = URL(string: v), let ok = try? Validate.url(u) { return ok }
+        }
+        return nil
     }
 
     // MARK: profile

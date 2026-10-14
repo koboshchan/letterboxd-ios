@@ -5,9 +5,12 @@ struct FilmScreen: View {
     @Environment(AppEnvironment.self) private var env
     let summary: FilmSummary
     @State private var loader: ValueLoader<FilmDetail>?
+    @Environment(\.dismiss) private var dismiss
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
+                BackdropHero(url: loader?.value?.backdropURL, loading: loader?.value == nil && loader?.error == nil)
+                    .padding(.horizontal, -20).padding(.top, -20)
                 HStack(alignment: .bottom, spacing: 16) {
                     PosterView(film: summary).frame(width: 130)
                     VStack(alignment: .leading, spacing: 6) {
@@ -30,7 +33,20 @@ struct FilmScreen: View {
                 Link(destination: summary.pageURL) { Label("Reviews and lists on Letterboxd", systemImage: "safari") }.buttonStyle(.bordered)
             }.padding(20)
         }
-        .navigationBarTitleDisplayMode(.inline)
+        .ignoresSafeArea(edges: .top)
+        .navigationBarBackButtonHidden(true)
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) { FloatingCircle(symbol: "chevron.left", label: "Back") { dismiss() } }
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    ShareLink(item: summary.pageURL) { Label("Share", systemImage: "square.and.arrow.up") }
+                    Button { UIPasteboard.general.url = summary.pageURL } label: { Label("Copy link", systemImage: "link") }
+                    Link(destination: summary.pageURL) { Label("Open on Letterboxd", systemImage: "safari") }
+                } label: { FloatingCircleLabel(symbol: "ellipsis") }
+                .accessibilityLabel("More")
+            }
+        }
+        .toolbarBackground(.hidden, for: .navigationBar)
         .task {
             let s = env.service, slug = summary.slug
             if loader == nil { loader = ValueLoader { r in try await s.film(slug: slug, refresh: r) } }
@@ -43,4 +59,37 @@ struct FilmScreen: View {
             Text(names.joined(separator: ", ")).font(.subheadline)
         }
     }
+}
+
+/// Wide backdrop that fades into the screen background. Missing/loading art keeps the same height with a neutral wash.
+struct BackdropHero: View {
+    let url: URL?
+    let loading: Bool
+    var body: some View {
+        Color(.secondarySystemBackground)
+            .frame(height: 300)
+            .overlay {
+                if let url {
+                    AsyncImage(url: url) { ph in
+                        if let i = ph.image { i.resizable().scaledToFill() } else { Color.clear }
+                    }
+                } else if loading { ProgressView() }
+            }
+            .clipped()
+            .overlay(alignment: .top) { LinearGradient(colors: [.black.opacity(0.45), .clear], startPoint: .top, endPoint: .bottom).frame(height: 110) }
+            .overlay(alignment: .bottom) { LinearGradient(colors: [.clear, Color(.systemBackground)], startPoint: .top, endPoint: .bottom).frame(height: 160) }
+            .accessibilityHidden(true)
+    }
+}
+
+struct FloatingCircleLabel: View {
+    let symbol: String
+    var body: some View {
+        Image(systemName: symbol).font(.system(size: 16, weight: .semibold)).foregroundStyle(.white)
+            .frame(width: 44, height: 44).background(.black.opacity(0.5), in: Circle()).contentShape(Circle())
+    }
+}
+struct FloatingCircle: View {
+    let symbol: String, label: String, action: () -> Void
+    var body: some View { Button(action: action) { FloatingCircleLabel(symbol: symbol) }.accessibilityLabel(label) }
 }

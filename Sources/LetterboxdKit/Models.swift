@@ -31,7 +31,10 @@ public struct FilmDetail: Hashable, Sendable, Codable {
     public let genres: [String]
     public let averageRating: Double?
     public let ratingCount: Int?
-    public init(slug: String, title: String, year: Int?, tagline: String?, synopsis: String?, posterURL: URL?, runtimeMinutes: Int?, directors: [Person], cast: [Person], genres: [String], averageRating: Double?, ratingCount: Int?) {
+    /// From the film page backdrop element (#backdrop data-backdrop-mobile / data-backdrop). nil when the film has none.
+    public let backdropURL: URL?
+    public init(slug: String, title: String, year: Int?, tagline: String?, synopsis: String?, posterURL: URL?, runtimeMinutes: Int?, directors: [Person], cast: [Person], genres: [String], averageRating: Double?, ratingCount: Int?, backdropURL: URL? = nil) {
+        self.backdropURL = backdropURL
         self.slug = slug; self.title = title; self.year = year; self.tagline = tagline; self.synopsis = synopsis
         self.posterURL = posterURL; self.runtimeMinutes = runtimeMinutes; self.directors = directors; self.cast = cast
         self.genres = genres; self.averageRating = averageRating; self.ratingCount = ratingCount
