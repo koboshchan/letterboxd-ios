@@ -27,9 +27,18 @@ public enum RedirectPolicy {
 }
 final class RedirectGuard: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
     let authenticated: Bool
-    init(authenticated: Bool) { self.authenticated = authenticated }
+    /// Test seam: observes every redirect callback URLSession actually delivers (status, target, allowed).
+    let observer: (@Sendable (Int, URL?, Bool) -> Void)?
+    /// Test seam ONLY (negative control): false makes the delegate follow redirects unchanged. Always true in the app.
+    let enforce: Bool
+    /// Test seam: replaces the exact-site predicate so a loopback server can stand in for letterboxd.com. nil in the app.
+    let siteCheck: (@Sendable (URL) -> Bool)?
+    init(authenticated: Bool, observer: (@Sendable (Int, URL?, Bool) -> Void)? = nil, enforce: Bool = true, siteCheck: (@Sendable (URL) -> Bool)? = nil) { self.authenticated = authenticated; self.observer = observer; self.enforce = enforce; self.siteCheck = siteCheck }
     func urlSession(_ s: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse, newRequest: URLRequest) async -> URLRequest? {
-        guard let u = newRequest.url, RedirectPolicy.allows(to: u, authenticated: authenticated) else { return nil }
+        guard enforce else { observer?(response.statusCode, newRequest.url, true); return newRequest }
+        let ok = newRequest.url.map { u in siteCheck.map { !authenticated && $0(u) } ?? RedirectPolicy.allows(to: u, authenticated: authenticated) } ?? false
+        observer?(response.statusCode, newRequest.url, ok)
+        guard ok else { return nil }
         var r = newRequest
         for h in ["Cookie", "Authorization", "X-CSRF-Token", "X-Requested-With"] { r.setValue(nil, forHTTPHeaderField: h) }
         return r
@@ -39,8 +48,15 @@ final class RedirectGuard: NSObject, URLSessionTaskDelegate, @unchecked Sendable
 public struct URLSessionTransport: HTTPTransport {
     private let configuration: URLSessionConfiguration
     private let cookieHeader: (@Sendable () -> String?)?
+    let redirectObserver: (@Sendable (Int, URL?, Bool) -> Void)?
+    let enforceRedirectPolicy: Bool
+    var testSite: (@Sendable (URL) -> Bool)? = nil
     /// cookieHeader (optional) is attached ONLY to https://letterboxd.com requests, for the signed-in account.
     public init(configuration: URLSessionConfiguration? = nil, cookieHeader: (@Sendable () -> String?)? = nil) {
+        self.init(configuration: configuration, cookieHeader: cookieHeader, observer: nil, enforce: true)
+    }
+    init(configuration: URLSessionConfiguration?, cookieHeader: (@Sendable () -> String?)?, observer: (@Sendable (Int, URL?, Bool) -> Void)?, enforce: Bool) {
+        self.redirectObserver = observer; self.enforceRedirectPolicy = enforce
         self.cookieHeader = cookieHeader
         let c = configuration ?? URLSessionConfiguration.ephemeral
         c.timeoutIntervalForRequest = 20
@@ -49,18 +65,18 @@ public struct URLSessionTransport: HTTPTransport {
         self.configuration = c
     }
     public func get(_ url: URL, accept: String) async throws -> HTTPResult {
-        var r = URLRequest(url: try Validate.url(url))
+        var r = URLRequest(url: testSite == nil ? try Validate.url(url) : url)
         r.httpMethod = "GET"
         r.setValue(accept, forHTTPHeaderField: "Accept")
         var authenticated = false
-        if let h = cookieHeader?(), !h.isEmpty, let u = r.url, RedirectPolicy.mayCarryCredentials(u) { r.setValue(h, forHTTPHeaderField: "Cookie"); authenticated = true }
+        if let h = cookieHeader?(), !h.isEmpty, let u = r.url, testSite.map({ $0(u) }) ?? RedirectPolicy.mayCarryCredentials(u) { r.setValue(h, forHTTPHeaderField: "Cookie"); authenticated = true }
         r.setValue("LetterboxdReader/0.1 (read-only personal client; user-triggered)", forHTTPHeaderField: "User-Agent")
         do {
             let (d, resp) = try await { () async throws -> (Data, URLResponse) in
                 // Session-level delegate (per request): redirect handling is enforced on every platform.
-                let s = URLSession(configuration: configuration, delegate: RedirectGuard(authenticated: authenticated), delegateQueue: nil)
+                let s = URLSession(configuration: configuration, delegate: RedirectGuard(authenticated: authenticated, observer: redirectObserver, enforce: enforceRedirectPolicy, siteCheck: testSite), delegateQueue: nil)
                 defer { s.finishTasksAndInvalidate() }
-                return try await s.data(for: r, delegate: RedirectGuard(authenticated: authenticated))
+                return try await s.data(for: r, delegate: RedirectGuard(authenticated: authenticated, observer: redirectObserver, enforce: enforceRedirectPolicy, siteCheck: testSite))
             }()
             return HTTPResult(data: d, status: (resp as? HTTPURLResponse)?.statusCode ?? 0)
         } catch is CancellationError { throw LetterboxdError.cancelled

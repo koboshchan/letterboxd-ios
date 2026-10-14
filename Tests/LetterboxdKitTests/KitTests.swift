@@ -1,4 +1,7 @@
 import XCTest
+#if canImport(Network)
+import Network
+#endif
 #if canImport(FoundationNetworking)
 import FoundationNetworking
 #endif
@@ -340,22 +343,43 @@ final class AuthTransportTests: XCTestCase {
         }
     }
     #if !canImport(FoundationNetworking)
-    func testAuthenticatedRequestNeverFollowsRedirects() async throws {
-        for code in [301, 302, 307, 308] {
-            RedirectStub.seen = []; RedirectStub.code = code
-            let c = URLSessionConfiguration.ephemeral; c.protocolClasses = [RedirectStub.self]
-            let t = URLSessionTransport(configuration: c, cookieHeader: { "letterboxd.user.CURRENT=secret" })
-            let r = try await t.get(URL(string: "https://letterboxd.com/start/")!, accept: "text/html")
-            _ = r   // URLProtocol stubs surface a refused redirect as an empty 200; the proof is that the target is never requested
-            XCTAssertEqual(RedirectStub.seen.map { $0.url!.absoluteString }, ["https://letterboxd.com/start/"])
-            XCTAssertEqual(RedirectStub.seen.first?.value(forHTTPHeaderField: "Cookie"), "letterboxd.user.CURRENT=secret")
+    /// REAL URLSession against a real loopback HTTP server. Site host = 127.0.0.1, off-host = localhost (same server).
+    /// Authenticated: callback delivered, refused, target never requested, cookie only on the first hop.
+    /// Guest same-host: followed, distinctive body, no Cookie. Guest off-host: refused. enforce=false: followed (negative control).
+    func testRealURLSessionRedirectCallbacks() async throws {
+        let srv = try LoopbackServer(); defer { srv.stop() }
+        final class Log: @unchecked Sendable { let l = NSLock(); var ev: [(Int, String, Bool)] = []; func add(_ s: Int, _ u: URL?, _ ok: Bool) { l.lock(); ev.append((s, u?.absoluteString ?? "", ok)); l.unlock() } }
+        let site: @Sendable (URL) -> Bool = { $0.host == "127.0.0.1" && $0.port == srv.port }
+        func run(_ code: Int, to host: String, cookie: Bool, enforce: Bool) async throws -> (HTTPResult, Log, [LoopbackServer.Req]) {
+            srv.reset()
+            let log = Log()
+            let ch: (@Sendable () -> String?)? = cookie ? ({ "letterboxd.user.CURRENT=secret" } as @Sendable () -> String?) : nil
+            let obs: @Sendable (Int, URL?, Bool) -> Void = { s, u, ok in log.add(s, u, ok) }
+            var t = URLSessionTransport(configuration: nil, cookieHeader: ch, observer: obs, enforce: enforce)
+            t.testSite = site
+            let u = URL(string: "http://127.0.0.1:\(srv.port)/start?code=\(code)&to=http://\(host):\(srv.port)/other")!
+            let r = try await t.get(u, accept: "text/html")
+            return (r, log, srv.requests)
         }
-        // Unauthenticated redirect to another host is refused too; same-site exact host is followed without cookies.
-        RedirectStub.seen = []; RedirectStub.code = 302; RedirectStub.target = "https://evil.com/x"
-        let c = URLSessionConfiguration.ephemeral; c.protocolClasses = [RedirectStub.self]
-        let r = try await URLSessionTransport(configuration: c).get(URL(string: "https://letterboxd.com/start/")!, accept: "text/html")
-        _ = r; XCTAssertEqual(RedirectStub.seen.count, 1)
-        RedirectStub.target = "https://letterboxd.com/other/"
+        func body(_ r: HTTPResult) -> String { String(decoding: r.data, as: UTF8.self) }
+        for code in [301, 302, 303, 307, 308] {
+            for host in ["127.0.0.1", "localhost"] {
+                let (r, log, seen) = try await run(code, to: host, cookie: true, enforce: true)
+                XCTAssertEqual(log.ev.count, 1, "callback not delivered \(code)"); XCTAssertEqual(log.ev.first?.0, code); XCTAssertEqual(log.ev.first?.2, false)
+                XCTAssertEqual(seen.map { $0.path }, ["/start"], "target must never be requested (\(code) \(host))")
+                XCTAssertEqual(seen.first?.cookie, "letterboxd.user.CURRENT=secret")
+                XCTAssertEqual(r.status, code); XCTAssertFalse(body(r).contains("TARGET-BODY"))
+            }
+            let (r, log, seen) = try await run(code, to: "127.0.0.1", cookie: false, enforce: true)
+            XCTAssertEqual(log.ev.first?.0, code); XCTAssertEqual(log.ev.first?.2, true)
+            XCTAssertEqual(seen.map { $0.path }, ["/start", "/other"]); XCTAssertNil(seen.last?.cookie)
+            XCTAssertEqual(r.status, 200); XCTAssertEqual(body(r), "TARGET-BODY-7f3a")
+            let (r2, log2, seen2) = try await run(code, to: "localhost", cookie: false, enforce: true)
+            XCTAssertEqual(log2.ev.first?.2, false); XCTAssertEqual(seen2.map { $0.path }, ["/start"]); XCTAssertEqual(r2.status, code)
+            let (r3, log3, seen3) = try await run(code, to: "localhost", cookie: true, enforce: false)
+            XCTAssertEqual(log3.ev.count, 1, "negative control: callback ran"); XCTAssertEqual(seen3.map { $0.path }, ["/start", "/other"], "negative control must follow")
+            XCTAssertEqual(body(r3), "TARGET-BODY-7f3a")
+        }
     }
     #endif
 }
@@ -382,12 +406,13 @@ final class RedirectStub: URLProtocol, @unchecked Sendable {
             client?.urlProtocol(self, wasRedirectedTo: n, redirectResponse: resp)
         } else {
             client?.urlProtocol(self, didReceive: HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, cacheStoragePolicy: .notAllowed)
-            client?.urlProtocol(self, didLoad: Data()); client?.urlProtocolDidFinishLoading(self)
+            client?.urlProtocol(self, didLoad: Data("TARGET-BODY-\(request.url!.host!)".utf8)); client?.urlProtocolDidFinishLoading(self)
         }
     }
     override func stopLoading() {}
 }
 
+actor Entered { var n=0; func hit(){ n+=1 }; func wait() async { while n==0 { try? await Task.sleep(nanoseconds: 1_000_000) } } }
 actor Gate { var open=false; func wait() async { while !open { try? await Task.sleep(nanoseconds: 2_000_000) } }; func release(){ open=true } }
 final class AccountRaceTests: XCTestCase {
     func testBlockDetectorRejectsAll3xx() {
@@ -427,9 +452,9 @@ final class AccountRaceTests: XCTestCase {
     }
     /// Default (tokenless) public calls are fenced too: a logout during the fetch means nothing persists.
     func testDefaultCompleteFetchLogoutNeverPersists() async throws {
-        let st = InMemorySessionStore(); let svc = LiveAccountService(store: st); let gate = Gate()
-        let t = Task { try await svc.complete(cookies: [AccountRaceTests.cookie], fetch: { _ in await gate.wait(); return (200, AccountRaceTests.page) }) }
-        try await Task.sleep(nanoseconds: 50_000_000)
+        let st = InMemorySessionStore(); let svc = LiveAccountService(store: st); let gate = Gate(); let ent = Entered()
+        let t = Task { try await svc.complete(cookies: [AccountRaceTests.cookie], fetch: { _ in await ent.hit(); await gate.wait(); return (200, AccountRaceTests.page) }) }
+        await ent.wait()
         try svc.signOutNow(); await gate.release()
         do { _ = try await t.value; XCTFail("must refuse") } catch {}
         XCTAssertNil(try st.load())
@@ -437,9 +462,9 @@ final class AccountRaceTests: XCTestCase {
     /// A stale restore that sees an invalid identity must not clear a newer login made after logout.
     func testStaleFailedRestoreCannotClearNewLogin() async throws {
         let st = InMemorySessionStore(); try st.save(Session(username: "uu", cookies: [AccountRaceTests.cookie], storedAt: Date()))
-        let svc = LiveAccountService(store: st); let gate = Gate()
-        let r = Task { try await svc.restore(fetch: { _ in await gate.wait(); return (200, "<script>person = { username: \"\", loggedIn: false }</script>") }) }
-        try await Task.sleep(nanoseconds: 50_000_000)
+        let svc = LiveAccountService(store: st); let gate = Gate(); let ent = Entered()
+        let r = Task { try await svc.restore(fetch: { _ in await ent.hit(); await gate.wait(); return (200, "<script>person = { username: \"\", loggedIn: false }</script>") }) }
+        await ent.wait()
         try svc.signOutNow()
         _ = try await svc.complete(cookies: [AccountRaceTests.cookie], fetch: { _ in (200, AccountRaceTests.page) })   // newer login
         await gate.release()
@@ -483,3 +508,44 @@ final class BlockingStore: SessionStore, @unchecked Sendable {
     func save(_ x: Session) throws { lock.lock(); _saving = true; lock.unlock(); release.wait(); lock.lock(); s = x; lock.unlock() }
     func clear() throws { lock.lock(); s = nil; _cleared = true; lock.unlock() }
 }
+
+#if !canImport(FoundationNetworking)
+/// Real loopback HTTP/1.1 server (test only). GET /start?code=N&to=URL answers N with Location; /other answers 200 TARGET-BODY-7f3a.
+final class LoopbackServer: @unchecked Sendable {
+    struct Req: Sendable { let path: String; let cookie: String? }
+    private let listener: NWListener
+    private let lock = NSLock(); private var reqs: [Req] = []
+    private(set) var port: Int = 0
+    var requests: [Req] { lock.lock(); defer { lock.unlock() }; return reqs }
+    func reset() { lock.lock(); reqs = []; lock.unlock() }
+    func stop() { listener.cancel() }
+    init() throws {
+        let params = NWParameters.tcp
+        let ls = try NWListener(using: params, on: .any)
+        listener = ls
+        let ready = DispatchSemaphore(value: 0)
+        ls.stateUpdateHandler = { if case .ready = $0 { ready.signal() } }
+        ls.newConnectionHandler = { [unowned self] c in self.handle(c) }
+        ls.start(queue: .global())
+        _ = ready.wait(timeout: .now() + 5)
+        port = Int(ls.port?.rawValue ?? 0)
+    }
+    private func handle(_ c: NWConnection) {
+        c.start(queue: .global())
+        c.receive(minimumIncompleteLength: 1, maximumLength: 8192) { [self] data, _, _, _ in
+            let text = String(decoding: data ?? Data(), as: UTF8.self)
+            let lines = text.components(separatedBy: "\r\n")
+            let target = lines.first?.split(separator: " ").dropFirst().first.map(String.init) ?? "/"
+            let comps = URLComponents(string: "http://x" + target)
+            let cookie = lines.first { $0.lowercased().hasPrefix("cookie:") }.map { String($0.dropFirst(7)).trimmingCharacters(in: .whitespaces) }
+            lock.lock(); reqs.append(Req(path: comps?.path ?? "/", cookie: cookie)); lock.unlock()
+            var head: String, body = ""
+            if comps?.path == "/start", let code = comps?.queryItems?.first(where: { $0.name == "code" })?.value, let to = comps?.queryItems?.first(where: { $0.name == "to" })?.value {
+                head = "HTTP/1.1 \(code) Redirect\r\nLocation: \(to)\r\n"
+            } else { body = "TARGET-BODY-7f3a"; head = "HTTP/1.1 200 OK\r\n" }
+            let out = head + "Content-Length: \(body.utf8.count)\r\nConnection: close\r\n\r\n" + body
+            c.send(content: Data(out.utf8), completion: .contentProcessed { _ in c.cancel() })
+        }
+    }
+}
+#endif
