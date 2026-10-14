@@ -25,4 +25,20 @@ final class NetworkTests: XCTestCase {
         XCTAssertEqual(p.items[0].username, "vertsdu"); XCTAssertEqual(p.items[0].displayName, "vertsdu")
         XCTAssertEqual(p.items[0].avatarURL?.host, "a.ltrbxd.com")
     }
+
+    /// First six tiles of a real GET /actor/brad-pitt/ page.
+    func testRealActorFilmographyGrid() throws {
+        let p = try Parsers.filmGrid(html: try fixtureText("real-actor-grid", "html"), page: 1)
+        XCTAssertEqual(p.items.count, 6); XCTAssertEqual(p.items.first?.slug, "fight-club")
+        XCTAssertEqual(Set(p.items.map(\.slug)).count, 6, "no duplicates")
+    }
+    func testPersonLinkValidation() throws {
+        let ok = try Validate.personLink(URL(string: "https://letterboxd.com/actor/brad-pitt/")!)
+        XCTAssertEqual(ok.role, .actor); XCTAssertEqual(ok.slug, "brad-pitt")
+        for bad in ["https://evil.example/actor/brad-pitt/", "http://letterboxd.com/actor/brad-pitt/", "https://letterboxd.com:8443/actor/x/",
+                    "https://letterboxd.com/film/fight-club/", "https://letterboxd.com/actor/x/y/", "https://letterboxd.com/actor/..%2Fx/",
+                    "https://letterboxd.com/actor/brad-pitt/?a=1", "https://u@letterboxd.com/actor/x/"] {
+            XCTAssertThrowsError(try Validate.personLink(URL(string: bad)!), bad)
+        }
+    }
 }

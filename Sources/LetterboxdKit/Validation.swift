@@ -22,7 +22,18 @@ public enum LetterboxdError: Error, Equatable, LocalizedError, Sendable {
     }
 }
 
+public enum PersonRole: String, CaseIterable, Sendable, Codable { case actor, director, writer, producer, composer, cinematography, editor
+    case productionDesign = "production-design", costumeDesign = "costume-design", makeup, sound, visualEffects = "visual-effects", stunts }
+
 public enum Validate {
+    /// Accepts only a Letterboxd /<role>/<slug>/ link (absolute https on an allowed host or site-relative). Returns role and slug.
+    public static func personLink(_ u: URL) throws -> (role: PersonRole, slug: String) {
+        let ok = try? url(u)
+        guard let ok, ok.query == nil, ok.fragment == nil else { throw LetterboxdError.invalidInput("person") }
+        let parts = ok.path.split(separator: "/").map(String.init)
+        guard parts.count == 2, let role = PersonRole(rawValue: parts[0]), let slug = try? Validate.slug(parts[1]) else { throw LetterboxdError.invalidInput("person") }
+        return (role, slug)
+    }
     public static func username(_ s: String) throws -> String {
         let t = s.trimmingCharacters(in: .whitespaces).lowercased()
         guard t.range(of: #"^[a-z0-9_]{2,15}$"#, options: .regularExpression) != nil

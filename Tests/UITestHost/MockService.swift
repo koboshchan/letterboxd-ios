@@ -50,6 +50,9 @@ final class MockService: LetterboxdService, @unchecked Sendable {
         if query.lowercased().contains("boom") { throw LetterboxdError.network("mock offline") }
         return Page(items: [FilmSummary(slug: "found-film", title: "Found Film", year: 2010)], page: 1, hasNext: false)
     }
+    func personFilms(role: PersonRole, slug: String, page: Int, refresh: Bool) async throws -> Page<FilmSummary> {
+        Page(items: [FilmSummary(slug: "found-film", title: "Found Film", year: 2010)], page: 1, hasNext: false)
+    }
     func searchMembers(query: String, page: Int) async throws -> Page<MemberSummary> {
         if query.lowercased().contains("nothing") { return Page(items: [], page: 1, hasNext: false) }
         return Page(items: [MemberSummary(username: "annabel", displayName: "Annabel", avatarURL: nil)], page: 1, hasNext: false)
