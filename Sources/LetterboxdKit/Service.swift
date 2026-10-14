@@ -14,6 +14,7 @@ public protocol LetterboxdService: Sendable {
     func following(username: String, page: Int, refresh: Bool) async throws -> Page<MemberSummary>
     func followers(username: String, page: Int, refresh: Bool) async throws -> Page<MemberSummary>
     func filmReviews(slug: String, page: Int, refresh: Bool) async throws -> Page<FilmReview>
+    func fullReviewText(path: String) async throws -> String
     func listFilms(list: URL, page: Int, refresh: Bool) async throws -> Page<FilmSummary>
     func filmLists(slug: String, page: Int, refresh: Bool) async throws -> Page<ListSummary>
     func personFilms(role: PersonRole, slug: String, page: Int, refresh: Bool) async throws -> Page<FilmSummary>
@@ -74,6 +75,10 @@ public final class PublicWebService: LetterboxdService {
     public func personFilms(role: PersonRole, slug: String, page: Int, refresh: Bool) async throws -> Page<FilmSummary> {
         let s = try Validate.slug(slug)
         return try Parsers.filmGrid(html: try await fetcher.text(url([role.rawValue, s], page: page), forceRefresh: refresh), page: page)
+    }
+    public func fullReviewText(path: String) async throws -> String {
+        guard path.hasPrefix("/s/full-text/"), !path.contains(".."), !path.contains("?"), let u = URL(string: "https://letterboxd.com" + path) else { throw LetterboxdError.invalidInput("path") }
+        return try Parsers.fullText(html: try await fetcher.text(try Validate.url(u), accept: "text/html"))
     }
     public func filmReviews(slug: String, page: Int, refresh: Bool) async throws -> Page<FilmReview> {
         let s = try Validate.slug(slug)

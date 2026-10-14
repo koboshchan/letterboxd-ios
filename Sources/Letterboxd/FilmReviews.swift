@@ -59,16 +59,22 @@ struct ReviewRow: View {
 struct ReviewDetailScreen: View {
     let review: FilmReview
     let film: FilmSummary
+    @Environment(AppEnvironment.self) private var env
+    @State private var full: String?
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 Text(film.title).font(Theme.serif(30, weight: .bold))
                 NavigationLink(value: MemberRoute(username: review.username)) { Text("Review by \(review.author)").font(.headline) }
                 if let s = review.rating { StarsView(rating: s) }
-                Text(review.text).font(.body).lineSpacing(3).textSelection(.enabled)
-                if review.fullTextPath != nil { Text("This review may be longer on Letterboxd.").font(.footnote).foregroundStyle(.secondary) }
+                Text(full ?? review.text).font(.body).lineSpacing(3).textSelection(.enabled)
+                if review.fullTextPath != nil, full == nil { Text("This review may be longer on Letterboxd.").font(.footnote).foregroundStyle(.secondary) }
                 Link(destination: review.link) { Label("Open on Letterboxd", systemImage: "safari") }.buttonStyle(.bordered)
             }.padding(20).frame(maxWidth: .infinity, alignment: .leading)
         }.navigationBarTitleDisplayMode(.inline)
+        .task {
+            guard let p = review.fullTextPath, full == nil else { return }
+            full = try? await env.service.fullReviewText(path: p)
+        }
     }
 }

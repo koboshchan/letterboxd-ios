@@ -67,3 +67,17 @@ final class WriteTests: XCTestCase {
         let n = await rec.all().count; XCTAssertEqual(n, 0)
     }
 }
+
+final class FullTextTests: XCTestCase {
+    func testFullTextFragment() throws {
+        let t = try Parsers.fullText(html: try fixtureText("real-full-text-shape", "html"))
+        XCTAssertEqual(t.components(separatedBy: "\n\n").count, 5)
+        XCTAssertTrue(t.contains("\"synthetic quotation\"")); XCTAssertTrue(t.contains("apostrophe's"))
+        XCTAssertThrowsError(try Parsers.fullText(html: "<div></div>"))
+    }
+    func testFullTextPathValidation() async {
+        let s = PublicWebService(fetcher: Fetcher(transport: StubTransport { _ in HTTPResult(data: Data("<p>x</p>".utf8), status: 200) }))
+        for bad in ["/other/1/", "/s/full-text/../x", "/s/full-text/a?b=1"] { do { _ = try await s.fullReviewText(path: bad); XCTFail(bad) } catch {} }
+        let ok = try? await s.fullReviewText(path: "/s/full-text/viewing:1/"); XCTAssertEqual(ok, "x")
+    }
+}

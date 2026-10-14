@@ -53,6 +53,7 @@ final class MockService: LetterboxdService, @unchecked Sendable {
     func personFilms(role: PersonRole, slug: String, page: Int, refresh: Bool) async throws -> Page<FilmSummary> {
         Page(items: [FilmSummary(slug: "found-film", title: "Found Film", year: 2010)], page: 1, hasNext: false)
     }
+    func fullReviewText(path: String) async throws -> String { throw LetterboxdError.notFound }
     func filmReviews(slug: String, page: Int, refresh: Bool) async throws -> Page<FilmReview> {
         if sc.empty { return Page(items: [], page: 1, hasNext: false) }
         return Page(items: [FilmReview(link: URL(string: "https://letterboxd.com/rev/film/\(slug)/")!, author: "Rae Reviewer", username: "rae", rating: 4, text: "Mock review body", date: nil, fullTextPath: nil)], page: 1, hasNext: false)

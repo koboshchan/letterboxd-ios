@@ -5,6 +5,13 @@ import FoundationXML
 #endif
 
 public enum Parsers {
+    /// /s/full-text/ returns an HTML fragment of sibling <p> elements (captured, status 200). Paragraphs joined by blank lines.
+    public static func fullText(html: String) throws -> String {
+        let doc = try SwiftSoup.parseBodyFragment(html)
+        let t = try doc.select("p").array().map { try $0.text() }.filter { !$0.isEmpty }.joined(separator: "\n\n")
+        guard !t.isEmpty else { throw LetterboxdError.parse("full text") }
+        return t
+    }
     static func splitTitleYear(_ s: String) -> (String, Int?) {
         let t = s.trimmingCharacters(in: .whitespacesAndNewlines)
         if let r = t.range(of: #" \((\d{4})\)$"#, options: .regularExpression) {
