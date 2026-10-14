@@ -78,7 +78,7 @@ struct SiteWebView: UIViewRepresentable {
         let v = WKWebView(frame: .zero, configuration: cfg)
         v.navigationDelegate = context.coordinator; v.uiDelegate = context.coordinator
         v.isOpaque = false; v.backgroundColor = .black; v.scrollView.backgroundColor = .black
-        v.load(URLRequest(url: URL(string: "https://letterboxd.com/")!))
+        v.load(URLRequest(url: URL(string: "https://letterboxd.com/sign-in/")!))
         onReady(v); return v
     }
     func updateUIView(_ v: WKWebView, context: Context) {}

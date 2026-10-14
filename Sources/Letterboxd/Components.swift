@@ -61,7 +61,7 @@ struct PosterGrid: View {
             if let e = loader.error { ErrorCard(error: e, retry: { Task { await loader.loadFirst(refresh: true) } }).padding() }
             if loader.isEmptyLoaded { EmptyCard(symbol: "film", title: emptyTitle, text: emptyBody).padding() }
         }
-        .contentMargins(.bottom, 24, for: .scrollContent)
+        .contentMargins(.bottom, 24, for: .scrollContent).defaultScrollAnchor(AppEnvironment.arg("-UIScrollBottom") != nil ? .bottom : .top)
         .refreshable { await loader.loadFirst(refresh: true) }
         .task { await loader.loadFirst() }
         .navigationDestination(for: FilmSummary.self) { FilmScreen(summary: $0) }
