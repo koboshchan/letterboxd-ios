@@ -12,7 +12,7 @@ struct BrowseScreen: View {
             PosterGrid(loader: loader(kind), emptyTitle: "Nothing here", emptyBody: "Letterboxd returned no films for this list.")
                 .id(kind)
         }
-        .background(Color.black).navigationTitle("Browse")
+        .navigationTitle("Browse")
     }
     private func loader(_ k: BrowseKind) -> PagedLoader<FilmSummary> { store.loader(k, service: env.service) }
 }
@@ -45,7 +45,6 @@ struct SearchScreen: View {
                 MemberList(loader: l, query: submitted).id(submitted)
             }
         }
-        .background(Color.black)
         .navigationTitle("Search")
         .searchable(text: $query, prompt: "Films or members")
         .searchScopes($scope) { ForEach(SearchScope.allCases, id: \.self) { Text($0.rawValue).tag($0) } }
@@ -70,7 +69,7 @@ struct MemberList: View {
             ForEach(loader.items) { m in
                 Button { env.username = m.username } label: {
                     HStack(spacing: 12) { AvatarView(url: m.avatarURL); VStack(alignment: .leading) { Text(m.displayName).font(.headline); Text("@" + m.username).font(.caption).foregroundStyle(.secondary) } }
-                }.listRowBackground(Color.black)
+                }
             }
             if loader.isEmptyLoaded { EmptyCard(symbol: "person.2", title: "No members found", text: "Nothing matched \u{201C}\(query)\u{201D}.").listRowBackground(Color.clear) }
             if let e = loader.error { ErrorCard(error: e, retry: { Task { await loader.loadFirst(refresh: true) } }, link: URL(string: "https://letterboxd.com/members/")).listRowBackground(Color.clear) }

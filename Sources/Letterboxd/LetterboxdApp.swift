@@ -10,7 +10,6 @@ struct LetterboxdApp: App {
             RootView()
                 .environment(env)
                 .environment(account)
-                .preferredColorScheme(.dark)
                 .tint(Theme.green)
                 .task { account.auth = env.auth; account.onUsernameChange = { [env] u in env.username = u ?? "" }; await account.restore() }
         }
@@ -18,11 +17,12 @@ struct LetterboxdApp: App {
 }
 
 enum Theme {
-    static let green = Color(red: 0, green: 0.878, blue: 0.329)       // #00E054
-    static let orange = Color(red: 1, green: 0.5, blue: 0.0)
+    static let green = Color(red: 0.0, green: 0.62, blue: 0.27)       // Letterboxd green, deepened so it reads on light and dark
+    static let orange = Color.orange
     static let blue = Color(red: 0.25, green: 0.74, blue: 0.96)
-    static let card = Color(white: 0.09)
-    static let hairline = Color.white.opacity(0.1)
+    static let card = Color(.secondarySystemBackground)
+    static let hairline = Color.primary.opacity(0.08)
+    static func serif(_ size: CGFloat, weight: Font.Weight = .semibold) -> Font { .system(size: size, weight: weight, design: .serif) }
 }
 
 /// Holds the live data layer. There is no demo, guest or fixture mode in the shipped app.
@@ -66,7 +66,6 @@ struct RootView: View {
             case .ready: tabs
             }
         }
-        .background(Color.black)
         .id(account.epoch)   // every auth change rebuilds all tabs and their loaded models
         .sheet(isPresented: $showSignIn) { SignInScreen() }
     }
@@ -87,18 +86,25 @@ struct GateScreen: View {
     var retry: (() -> Void)? = nil
     var signIn: (() -> Void)? = nil
     var body: some View {
-        VStack(spacing: 18) {
+        VStack(spacing: 28) {
             Spacer()
+            Image(systemName: "film.stack.fill").font(.system(size: 56)).foregroundStyle(Theme.green).accessibilityHidden(true)
+            VStack(spacing: 8) {
+                Text("Letterboxd").font(Theme.serif(44))
+                Text(title).font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
+            }
             if busy { ProgressView().controlSize(.large) }
-            else { Image(systemName: "person.crop.circle.badge.checkmark").font(.system(size: 56)).foregroundStyle(Theme.green).accessibilityHidden(true) }
-            Text(title).font(.title2.bold()).multilineTextAlignment(.center)
-            if let d = detail { Text(d).font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center).padding(.horizontal, 32) }
-            if let retry { Button("Try again", action: retry).buttonStyle(.bordered).tint(Theme.green) }
-            if let signIn { Button(action: signIn) { Text("Sign in").font(.headline).frame(maxWidth: 280, minHeight: 44) }.buttonStyle(.borderedProminent).tint(Theme.green).foregroundStyle(.black) }
+            if let d = detail { Text(d).font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center) }
             Spacer()
-            Text(Legal.notice).font(.caption2).foregroundStyle(.secondary).multilineTextAlignment(.center).padding(.horizontal, 28).padding(.bottom, 12)
+            if let retry { Button("Try again", action: retry).buttonStyle(.bordered).controlSize(.large) }
+            if let signIn {
+                Button(action: signIn) { Label("Sign in on letterboxd.com", systemImage: "person.badge.key").frame(maxWidth: .infinity) }
+                    .buttonStyle(.borderedProminent).controlSize(.large)
+            }
+            Text(Legal.notice).font(.caption2).foregroundStyle(.secondary).multilineTextAlignment(.center)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity).background(Color.black)
+        .padding(28)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 

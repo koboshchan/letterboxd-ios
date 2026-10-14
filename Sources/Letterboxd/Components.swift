@@ -39,8 +39,9 @@ struct PosterView: View {
                     titleCard
                 }
             }
-        .clipShape(RoundedRectangle(cornerRadius: 6))
-        .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.hairline))
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Theme.hairline))
+        .shadow(color: .black.opacity(0.18), radius: 8, y: 4)
         .accessibilityLabel(film.title)
         .task(id: film.slug) {
             guard film.posterURL == nil else { return }
@@ -70,7 +71,7 @@ struct PosterGrid: View {
         .refreshable { await loader.loadFirst(refresh: true) }
         .task { await loader.loadFirst() }
         .navigationDestination(for: FilmSummary.self) { FilmScreen(summary: $0) }
-        .background(Color.black)
+        
     }
 }
 
@@ -95,7 +96,7 @@ struct ErrorCard: View {
             }
         }
         .padding(20).frame(maxWidth: .infinity)
-        .background(Theme.card, in: RoundedRectangle(cornerRadius: 16))
+        .background(Theme.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 }
 

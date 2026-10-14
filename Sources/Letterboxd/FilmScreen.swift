@@ -11,7 +11,7 @@ struct FilmScreen: View {
                 HStack(alignment: .bottom, spacing: 16) {
                     PosterView(film: summary).frame(width: 130)
                     VStack(alignment: .leading, spacing: 6) {
-                        Text(summary.title).font(.title.bold())
+                        Text(summary.title).font(Theme.serif(28, weight: .bold))
                         if let y = summary.year { Text(String(y)).foregroundStyle(.secondary) }
                         if let d = loader?.value {
                             if let m = d.runtimeMinutes { Text("\(m) min").font(.subheadline).foregroundStyle(.secondary) }
@@ -21,7 +21,7 @@ struct FilmScreen: View {
                 }
                 if let d = loader?.value {
                     if let t = d.tagline { Text(t.uppercased()).font(.caption.weight(.semibold)).foregroundStyle(.secondary).tracking(1) }
-                    if let s = d.synopsis { Text(s).font(.body) }
+                    if let s = d.synopsis { Text(s).font(.body).lineSpacing(3) }
                     if !d.directors.isEmpty { section("Directed by", d.directors.map(\.name)) }
                     if !d.cast.isEmpty { section("Cast", d.cast.prefix(12).map(\.name)) }
                 } else if let e = loader?.error {
@@ -30,7 +30,7 @@ struct FilmScreen: View {
                 Link(destination: summary.pageURL) { Label("Reviews and lists on Letterboxd", systemImage: "safari") }.buttonStyle(.bordered)
             }.padding(20)
         }
-        .background(Color.black).navigationBarTitleDisplayMode(.inline)
+        .navigationBarTitleDisplayMode(.inline)
         .task {
             let s = env.service, slug = summary.slug
             if loader == nil { loader = ValueLoader { r in try await s.film(slug: slug, refresh: r) } }
@@ -39,7 +39,7 @@ struct FilmScreen: View {
     }
     private func section(_ t: String, _ names: [String]) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(t.uppercased()).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+            Text(t).font(Theme.serif(20))
             Text(names.joined(separator: ", ")).font(.subheadline)
         }
     }

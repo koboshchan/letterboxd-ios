@@ -24,7 +24,6 @@ struct ProfileScreen: View {
                 .pickerStyle(.segmented).padding(.horizontal, 16).padding(.bottom, 8)
             content
         }
-        .background(Color.black)
         .navigationTitle(u).navigationBarTitleDisplayMode(.inline)
         .toolbar { ToolbarItem(placement: .topBarTrailing) { Button { draft = u; editing = true } label: { Image(systemName: "person.crop.circle.badge.questionmark") }.accessibilityLabel("Change member") } }
         .alert("View another public member", isPresented: $editing) {
@@ -53,7 +52,7 @@ struct ProfileScreen: View {
             HStack(spacing: 14) {
                 AvatarView(url: p.value?.avatarURL, size: 64)
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(p.value?.displayName ?? env.username).font(.title2.bold())
+                    Text(p.value?.displayName ?? env.username).font(Theme.serif(26, weight: .bold))
                     if let v = p.value {
                         HStack(spacing: 14) {
                             stat(v.filmCount, "Films"); stat(v.followingCount, "Following"); stat(v.followersCount, "Followers")
@@ -93,13 +92,13 @@ struct EntryList: View {
             if let items = loader.value {
                 if items.isEmpty { EmptyCard(symbol: "book.closed", title: emptyTitle, text: emptyBody).listRowBackground(Color.clear) }
                 ForEach(items) { e in
-                    NavigationLink(value: e) { EntryRow(entry: e) }.listRowBackground(Color.black)
+                    NavigationLink(value: e) { EntryRow(entry: e) }
                 }
             }
             if let e = loader.error { ErrorCard(error: e, retry: { Task { await loader.load(refresh: true) } }).listRowBackground(Color.clear).listRowSeparator(.hidden) }
             if loader.isLoading && loader.value == nil { HStack { Spacer(); ProgressView(); Spacer() }.listRowBackground(Color.clear) }
         }
-        .listStyle(.plain).scrollContentBackground(.hidden).background(Color.black)
+        .listStyle(.plain)
         .refreshable { await loader.load(refresh: true) }
         .task { await loader.load() }
     }
@@ -111,10 +110,10 @@ struct EntryRow: View {
         HStack(alignment: .top, spacing: 12) {
             Theme.card.frame(width: 52, height: 78)
                 .overlay { AsyncImage(url: entry.posterURL) { $0.resizable().scaledToFill() } placeholder: { Color.clear } }
-                .clipShape(RoundedRectangle(cornerRadius: 5)).overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(Theme.hairline))
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous)).overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Theme.hairline)).shadow(color: .black.opacity(0.18), radius: 6, y: 3)
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
-                    Text(entry.filmTitle).font(.headline).lineLimit(2)
+                    Text(entry.filmTitle).font(Theme.serif(17)).lineLimit(2)
                     if let y = entry.filmYear { Text(String(y)).font(.subheadline).foregroundStyle(.secondary) }
                 }
                 HStack(spacing: 8) {
@@ -133,12 +132,12 @@ struct EntryScreen: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                Text(entry.filmTitle).font(.largeTitle.bold())
+                Text(entry.filmTitle).font(Theme.serif(34, weight: .bold))
                 if let r = entry.rating { StarsView(rating: r) }
                 if let rv = entry.review { Text(rv).font(.body) } else { Text("No written review.").foregroundStyle(.secondary) }
                 Link(destination: entry.link) { Label("Open on Letterboxd", systemImage: "safari") }.buttonStyle(.bordered)
             }.padding(20).frame(maxWidth: .infinity, alignment: .leading)
-        }.background(Color.black).navigationBarTitleDisplayMode(.inline)
+        }.navigationBarTitleDisplayMode(.inline)
     }
 }
 
@@ -149,17 +148,17 @@ struct ListsView: View {
             ForEach(loader.items) { l in
                 Link(destination: l.url) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(l.title).font(.headline)
+                        Text(l.title).font(Theme.serif(17))
                         if let c = l.filmCount { Text("\(c) films").font(.caption).foregroundStyle(Theme.green) }
                         if let b = l.blurb { Text(b).font(.subheadline).foregroundStyle(.secondary).lineLimit(2) }
                     }
-                }.listRowBackground(Color.black).task { await loader.loadMore(current: l) }
+                }.task { await loader.loadMore(current: l) }
             }
             if loader.isEmptyLoaded { EmptyCard(symbol: "list.bullet.rectangle", title: "No public lists", text: "This member hasn't published any lists.").listRowBackground(Color.clear) }
             if let e = loader.error { ErrorCard(error: e, retry: { Task { await loader.loadFirst(refresh: true) } }).listRowBackground(Color.clear) }
             if loader.isLoading { HStack { Spacer(); ProgressView(); Spacer() }.listRowBackground(Color.clear) }
         }
-        .listStyle(.plain).scrollContentBackground(.hidden).background(Color.black)
+        .listStyle(.plain)
         .refreshable { await loader.loadFirst(refresh: true) }
         .task { await loader.loadFirst() }
     }
