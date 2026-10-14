@@ -18,6 +18,12 @@ public struct Person: Hashable, Sendable, Codable {
     public init(name: String, url: URL?) { self.name = name; self.url = url }
 }
 
+public struct Credit: Hashable, Sendable, Codable, Identifiable {
+    public var id: String { role.rawValue + "/" + slug }
+    public let name: String; public let role: PersonRole; public let slug: String
+    public init(name: String, role: PersonRole, slug: String) { self.name = name; self.role = role; self.slug = slug }
+}
+
 public struct FilmDetail: Hashable, Sendable, Codable {
     public let slug: String
     public let title: String
@@ -33,7 +39,10 @@ public struct FilmDetail: Hashable, Sendable, Codable {
     public let ratingCount: Int?
     /// From the film page backdrop element (#backdrop data-backdrop-mobile / data-backdrop). nil when the film has none.
     public let backdropURL: URL?
-    public init(slug: String, title: String, year: Int?, tagline: String?, synopsis: String?, posterURL: URL?, runtimeMinutes: Int?, directors: [Person], cast: [Person], genres: [String], averageRating: Double?, ratingCount: Int?, backdropURL: URL? = nil) {
+    /// Cast and crew links from the film page (a.text-slug / a.contributor), validated, deduped.
+    public var credits: [Credit] = []
+    public init(slug: String, title: String, year: Int?, tagline: String?, synopsis: String?, posterURL: URL?, runtimeMinutes: Int?, directors: [Person], cast: [Person], genres: [String], averageRating: Double?, ratingCount: Int?, backdropURL: URL? = nil, credits: [Credit] = []) {
+        self.credits = credits
         self.backdropURL = backdropURL
         self.slug = slug; self.title = title; self.year = year; self.tagline = tagline; self.synopsis = synopsis
         self.posterURL = posterURL; self.runtimeMinutes = runtimeMinutes; self.directors = directors; self.cast = cast

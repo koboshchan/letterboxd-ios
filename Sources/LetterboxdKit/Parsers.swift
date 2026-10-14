@@ -74,7 +74,7 @@ public enum Parsers {
                           posterURL: (j["image"] as? String).flatMap(URL.init(string:)).flatMap { try? Validate.url($0) },
                           runtimeMinutes: minutes, directors: people("director"), cast: people("actor"),
                           genres: (j["genre"] as? [String]) ?? [], averageRating: avg, ratingCount: cnt,
-                          backdropURL: backdrop(doc))
+                          backdropURL: backdrop(doc), credits: credits(html: html))
     }
 
     /// Real film pages carry <div id="backdrop" data-backdrop-mobile=... data-backdrop=...>. Only https a.ltrbxd.com-style hosts pass Validate.url.
@@ -84,6 +84,24 @@ public enum Parsers {
             if let v = try? el.attr(k), !v.isEmpty, let u = URL(string: v), let ok = try? Validate.url(u) { return ok }
         }
         return nil
+    }
+
+    /// Real film pages link people as <a href="/actor/slug/" class="text-slug ...">Name</a>.
+    public static func credits(html: String) -> [Credit] {
+        guard let doc = try? SwiftSoup.parse(html, "https://letterboxd.com/") else { return [] }
+        var seen = Set<String>(), out: [Credit] = []
+        for a in (try? doc.select("a.text-slug[href], a.contributor[href]")) ?? Elements() {
+            guard let h = try? a.attr("href"), let u = Validate.resolve(h), let (role, slug) = try? Validate.personLink(u),
+                  let n = try? a.text().trimmingCharacters(in: .whitespacesAndNewlines), !n.isEmpty, n != "Show All…" else { continue }
+            if seen.insert(role.rawValue + "/" + slug).inserted { out.append(Credit(name: n, role: role, slug: slug)) }
+        }
+        return out
+    }
+    /// Person page title: "Films starring Brad Pitt" (og:title). The page carries no portrait (og:image is the site default), so none is shown.
+    public static func personName(html: String) -> String? {
+        guard let t = try? SwiftSoup.parse(html).select("meta[property=og:title]").first()?.attr("content") else { return nil }
+        for p in ["Films starring ", "Films directed by ", "Films written by ", "Films produced by ", "Films with ", "Films by "] where t.hasPrefix(p) { return String(t.dropFirst(p.count)) }
+        return t.isEmpty ? nil : t
     }
 
     // MARK: profile

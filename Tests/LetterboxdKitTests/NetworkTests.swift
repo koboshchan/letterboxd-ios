@@ -41,4 +41,19 @@ final class NetworkTests: XCTestCase {
             XCTAssertThrowsError(try Validate.personLink(URL(string: bad)!), bad)
         }
     }
+
+    func testRealFilmCredits() throws {
+        let c = Parsers.credits(html: try fixtureText("real-film-credits", "html"))
+        XCTAssertTrue(c.contains(Credit(name: "David Fincher", role: .director, slug: "david-fincher")))
+        XCTAssertTrue(c.contains { $0.role == .actor && $0.slug == "brad-pitt" && $0.name == "Brad Pitt" })
+        XCTAssertEqual(Set(c.map(\.id)).count, c.count, "deduped")
+        XCTAssertFalse(c.contains { $0.name.hasPrefix("Show All") })
+    }
+    func testCreditsDropHostileLinks() {
+        let h = #"<a class="text-slug" href="https://evil.example/actor/x/">Evil</a><a class="text-slug" href="/film/x/">Film</a><a class="text-slug" href="/actor/ok-one/">Ok</a>"#
+        XCTAssertEqual(Parsers.credits(html: h).map(\.slug), ["ok-one"])
+    }
+    func testPersonName() throws {
+        XCTAssertEqual(Parsers.personName(html: #"<meta property="og:title" content="Films starring Brad Pitt">"#), "Brad Pitt")
+    }
 }
