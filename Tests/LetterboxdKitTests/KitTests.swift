@@ -120,10 +120,6 @@ final class KitTests: XCTestCase {
 final class RecordedTests: XCTestCase {
     func rec(_ n: String) throws -> Data { try Data(contentsOf: Bundle.module.url(forResource: n, withExtension: "json", subdirectory: "Fixtures/recorded")!) }
     func html(_ n: String) throws -> String { String(decoding: try Data(contentsOf: Bundle.module.url(forResource: "real-" + n, withExtension: "html", subdirectory: "Fixtures/recorded")!), as: UTF8.self) }
-    /// The sanitizer stripped data-* attributes, so recorded grids carry no slugs. Verifies parse safety only.
-    func testRealPopularFixtureLacksDataAttributesButParses() throws {
-        let p = try Parsers.filmGrid(html: try html("popular"), page: 1); XCTAssertTrue(p.items.isEmpty)
-    }
     func testRealProfile() throws { let p = try Parsers.profile(html: try html("profile"), username: "example-member"); XCTAssertFalse(p.displayName.isEmpty) }
     func testRealListsAndSearchParse() throws {
         _ = try Parsers.lists(html: try html("lists"), page: 1)
@@ -159,28 +155,53 @@ final class AuthTests: XCTestCase {
     }
 }
 final class SignInTests: XCTestCase {
+    func html(_ n: String) throws -> String { String(decoding: try Data(contentsOf: Bundle.module.url(forResource: "real-" + n, withExtension: "html", subdirectory: "Fixtures/recorded")!), as: UTF8.self) }
     let good: [(name: String, value: String, domain: String)] = [("letterboxd.user.CURRENT", "c", "letterboxd.com"), ("com.xk72.webparts.csrf", "t", ".letterboxd.com"), ("evil", "x", "evil.example"), ("sneaky", "y", "letterboxd.com.evil.example")]
     func testNativeSignInReportsChallengeBlockerWithoutNetwork() async {
         do { _ = try await LiveAccountService(store: InMemorySessionStore()).signIn(email: "u", password: "p"); XCTFail() } catch { XCTAssertEqual(error as? AuthError, .verificationRequired) }
     }
-    func testWebSignInKeepsOnlyLetterboxdCookiesAndStores() throws {
-        let s = InMemorySessionStore(); let sess = try LiveAccountService(store: s).complete(username: "kobosh", cookies: good)
-        XCTAssertEqual(Set(sess.cookies.keys), ["letterboxd.user.CURRENT", "com.xk72.webparts.csrf"]); XCTAssertEqual(try s.load(), sess)
+    func wc(_ n: String, _ d: String = "letterboxd.com", path: String = "/", exp: Date? = nil, secure: Bool = true) -> WebCookie { WebCookie(name: n, value: "v", domain: d, path: path, expires: exp, secure: secure) }
+    let signedIn = "<script>person = { username: \"kobosh\", loggedIn: true, role: \"member\" }</script>"
+    let guest = "<script>person = {\n username: \"\"\n , loggedIn: false\n , role: \"guest\" }</script>"
+    func fetcher(_ status: Int, _ html: String) -> HomepageFetcher { { _ in (status, html) } }
+    func testCookieFiltering() {
+        let jar = SessionCookies.accept([wc("letterboxd.user.CURRENT"), wc("a", ".letterboxd.com"), wc("b", "evil.example"), wc("c", "letterboxd.com.evil.example"), wc("d", "x.letterboxd.com"), wc("e", path: "/x"), wc("f", secure: false), wc("g", exp: Date(timeIntervalSince1970: 1))])
+        XCTAssertEqual(Set(jar!.keys), ["letterboxd.user.CURRENT", "a"])
     }
-    func testWebSignInWithoutSessionCookieStoresNothing() {
+    func testExpiredOrInsecureSessionCookieRejected() {
+        XCTAssertNil(SessionCookies.accept([wc("letterboxd.user.CURRENT", exp: Date(timeIntervalSince1970: 1))]))
+        XCTAssertNil(SessionCookies.accept([wc("letterboxd.user.CURRENT", secure: false)]))
+        XCTAssertNil(SessionCookies.accept([wc("letterboxd.user.CURRENT", "x.letterboxd.com")]))
+    }
+    func testServerConfirmedIdentityStoresServerUsername() async throws {
         let s = InMemorySessionStore()
-        XCTAssertThrowsError(try LiveAccountService(store: s).complete(username: "kobosh", cookies: [("com.xk72.webparts.csrf", "t", "letterboxd.com")]))
+        let sess = try await LiveAccountService(store: s).complete(cookies: [wc("letterboxd.user.CURRENT")], fetch: fetcher(200, signedIn))
+        XCTAssertEqual(sess.username, "kobosh"); XCTAssertEqual(try s.load(), sess)
+    }
+    func testCookiePresenceAloneIsNotSignedIn() async {
+        for (st, h) in [(200, guest), (302, signedIn), (200, "<html>sign in</html>"), (403, "")] {
+            let s = InMemorySessionStore()
+            do { _ = try await LiveAccountService(store: s).complete(cookies: [wc("letterboxd.user.CURRENT")], fetch: fetcher(st, h)); XCTFail("\(st)") } catch { XCTAssertEqual(error as? AuthError, .notSignedIn) }
+            XCTAssertNil(try? s.load())
+        }
+    }
+    func testFetchErrorStoresNothing() async {
+        let s = InMemorySessionStore()
+        do { _ = try await LiveAccountService(store: s).complete(cookies: [wc("letterboxd.user.CURRENT")], fetch: { _ in throw LetterboxdError.network("x") }); XCTFail() } catch {}
         XCTAssertNil(try? s.load())
     }
-    func testBadUsernameRejected() { XCTAssertNil(SessionCookies.accept(good, username: "../x")) }
-    func testLoginFormRefusesWithoutBootstrapOrChallenge() {
-        XCTAssertThrowsError(try LoginForm.body(csrf: nil, username: "u", password: "p", remember: false, captchaToken: "t")) { XCTAssertEqual($0 as? LoginForm.Missing, .bootstrapCSRF) }
-        XCTAssertThrowsError(try LoginForm.body(csrf: "c", username: "u", password: "p", remember: false, captchaToken: nil)) { XCTAssertEqual($0 as? LoginForm.Missing, .challengeToken) }
+    func testNavigationPolicy() {
+        let ok = ["https://letterboxd.com/", "https://www.letterboxd.com/sign-in/"]
+        let bad = ["http://letterboxd.com/", "https://evil.letterboxd.com/", "https://letterboxd.com.evil.example/", "https://x@letterboxd.com/", "https://letterboxd.com:8443/", "javascript:alert(1)", "file:///etc/passwd", "https://challenges.cloudflare.com/"]
+        for u in ok { XCTAssertTrue(NavigationPolicy.allows(URL(string: u), mainFrame: true), u) }
+        for u in bad { XCTAssertFalse(NavigationPolicy.allows(URL(string: u), mainFrame: true), u) }
+        XCTAssertTrue(NavigationPolicy.allows(URL(string: "https://challenges.cloudflare.com/x"), mainFrame: false))
+        XCTAssertFalse(NavigationPolicy.allows(URL(string: "http://challenges.cloudflare.com/x"), mainFrame: false))
+        XCTAssertFalse(NavigationPolicy.allows(nil, mainFrame: true))
     }
-    func testUncheckedRememberOmitted() throws {
-        let b = try LoginForm.body(csrf: "c", username: "u", password: "p", remember: false, captchaToken: "t")
-        XCTAssertFalse(b.contains("remember")); XCTAssertTrue(b.hasSuffix("captchaAction=signin"))
-        XCTAssertTrue(try LoginForm.body(csrf: "c", username: "u", password: "p", remember: true, captchaToken: "t").contains("remember=true"))
+    func testRealPopularGridParsesFilms() throws {
+        let p = try Parsers.filmGrid(html: try html("popular-grid"), page: 1)
+        XCTAssertGreaterThan(p.items.count, 40); XCTAssertTrue(p.items.allSatisfy { !$0.slug.isEmpty && !$0.title.isEmpty })
     }
     func testSignOutClears() async throws {
         let s = InMemorySessionStore(); try s.save(Session(username: "u", cookies: [:]))
