@@ -1,0 +1,37 @@
+[
+  {
+    "kind": "search",
+    "url": "https://letterboxd.com/s/search/fight%20club/",
+    "status": 200,
+    "bytes": 20720,
+    "sanitization": "HTMLParser allowed attribute set; scripts/styles/iframes, input values, URL queries removed; member handle anonymized"
+  },
+  {
+    "kind": "popular",
+    "url": "https://letterboxd.com/films/popular/this/week/",
+    "status": 200,
+    "bytes": 47354,
+    "sanitization": "HTMLParser allowed attribute set; scripts/styles/iframes, input values, URL queries removed; member handle anonymized"
+  },
+  {
+    "kind": "profile",
+    "url": "https://letterboxd.com/example-member/",
+    "status": 200,
+    "bytes": 46412,
+    "sanitization": "HTMLParser allowed attribute set; scripts/styles/iframes, input values, URL queries removed; member handle anonymized"
+  },
+  {
+    "kind": "diary",
+    "url": "https://letterboxd.com/example-member/diary/",
+    "status": 200,
+    "bytes": 50147,
+    "sanitization": "HTMLParser allowed attribute set; scripts/styles/iframes, input values, URL queries removed; member handle anonymized"
+  },
+  {
+    "kind": "lists",
+    "url": "https://letterboxd.com/example-member/lists/",
+    "status": 200,
+    "bytes": 37966,
+    "sanitization": "HTMLParser allowed attribute set; scripts/styles/iframes, input values, URL queries removed; member handle anonymized"
+  }
+]

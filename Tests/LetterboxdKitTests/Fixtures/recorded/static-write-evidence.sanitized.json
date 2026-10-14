@@ -1,0 +1,17 @@
+[
+  {
+    "classification": "static JavaScript evidence only; not a submitted/verified write",
+    "excerpt": "t=e.map(e=>({production:e})),n={entries:JSON.stringify(t),__csrf:_()},r=Et(n),i=await te(`${baseURL}/watchlist/add-films/`,{method:`POST`,body:r,headers:{\"Content-Type\":`application/x-www-form-urlencoded`}});if(!i.ok)return ge({errorWhile:`adding films to watchlist`,errorCode:i.status});let a=await i.json();return me(a)",
+    "source": "https://s.ltrbxd.com/static/js/es/main-DWmCn6TQ.js"
+  },
+  {
+    "classification": "static JavaScript evidence only; not a submitted/verified write",
+    "excerpt": "e.data(`url`),$.extend({},bxd.autocompleteConfig,{width:228})).result(function(e,r,i){$.ajax({url:r.watchlistAction,data:{__csrf:_()},type:`POST`,dataType:`json`,success:function(e,r,i){e.csrf!==null&&e.csrf!==void 0&&g(e.csrf),e.messages&&(bxd.showMessages(e.result?`success`:`error`,e.messages),$(`#frm-watchlist-",
+    "source": "https://s.ltrbxd.com/static/js/es/main-DWmCn6TQ.js"
+  },
+  {
+    "classification": "static JavaScript evidence only; not a submitted/verified write",
+    "excerpt": "var e=`supermodelCSRF`,t=(t=e,n=window)=>n[t],n=(t,n=e,r=window)=>{if(t!=null){r[n]=t;for(let e of r.document.querySelectorAll(`input[name=__csrf]`))e instanceof HTMLInputElement&&(e.value=t)}};export{n,t};",
+    "source": "https://s.ltrbxd.com/static/js/es/chunks/WlWVCv9e.js"
+  }
+]

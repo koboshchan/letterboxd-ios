@@ -1,0 +1,135 @@
+{
+  "cookies": [
+    {
+      "name": "com.xk72.webparts.csrf",
+      "domain": "letterboxd.com",
+      "path": "/",
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax",
+      "persistent": false
+    },
+    {
+      "name": "letterboxd.user.CURRENT",
+      "domain": "letterboxd.com",
+      "path": "/",
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax",
+      "persistent": false
+    },
+    {
+      "name": "letterboxd.signed.in.as",
+      "domain": ".letterboxd.com",
+      "path": "/",
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "None",
+      "persistent": true
+    }
+  ],
+  "forms": [
+    {
+      "action": "https://letterboxd.com/example-member/lists/#",
+      "method": "post",
+      "fields": [
+        {
+          "name": "__csrf",
+          "type": "hidden"
+        },
+        {
+          "name": "authenticationCode",
+          "type": "hidden"
+        },
+        {
+          "name": "username",
+          "type": "email"
+        },
+        {
+          "name": "password",
+          "type": "password"
+        },
+        {
+          "name": "remember",
+          "type": "checkbox"
+        }
+      ]
+    },
+    {
+      "action": "https://letterboxd.com/search/",
+      "method": "get",
+      "fields": [
+        {
+          "name": "hidden",
+          "type": "text"
+        },
+        {
+          "name": "q",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "action": "https://letterboxd.com/example-member/lists/",
+      "method": "post",
+      "fields": []
+    },
+    {
+      "action": "https://letterboxd.com/example-member/lists/",
+      "method": "post",
+      "fields": []
+    },
+    {
+      "action": "https://letterboxd.com/s/save-diary-entry",
+      "method": "post",
+      "fields": [
+        {
+          "name": "__csrf",
+          "type": "hidden"
+        },
+        {
+          "name": "viewingId",
+          "type": "hidden"
+        },
+        {
+          "name": "viewingableUid",
+          "type": "hidden"
+        },
+        {
+          "name": "specifiedDate",
+          "type": "checkbox"
+        },
+        {
+          "name": "rewatch",
+          "type": "checkbox"
+        },
+        {
+          "name": "viewingDateStr",
+          "type": "hidden"
+        },
+        {
+          "name": "review",
+          "type": "textarea"
+        },
+        {
+          "name": "containsSpoilers",
+          "type": "checkbox"
+        },
+        {
+          "name": "tags",
+          "type": "text"
+        },
+        {
+          "name": "rating",
+          "type": "range"
+        },
+        {
+          "name": "liked",
+          "type": "checkbox"
+        }
+      ]
+    }
+  ],
+  "bootstrapName": "supermodelCSRF",
+  "bootstrapEvidence": "script assignment in actual film HTML; value omitted"
+}

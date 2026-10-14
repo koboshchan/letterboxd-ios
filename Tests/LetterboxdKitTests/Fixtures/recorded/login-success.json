@@ -1,0 +1,8 @@
+{
+  "result": "success",
+  "messages": [],
+  "messagesOptions": {
+    "sticky": true
+  },
+  "csrf": "[REDACTED]"
+}

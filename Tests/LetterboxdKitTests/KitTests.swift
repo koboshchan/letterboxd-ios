@@ -117,11 +117,25 @@ final class KitTests: XCTestCase {
         let r = try await svc.reviews(username: "kobosh", refresh: false); XCTAssertEqual(r.count, 1)
     }
 }
-final class CaptureTests: XCTestCase {
-    func testRecordedCaptureShowsBlockedHomepageAndNoAppEndpoints() throws {
-        let j = try JSONSerialization.jsonObject(with: try fixture("endpoint-report", "json")) as! [String: Any]
-        XCTAssertEqual(j["result"] as? String, "blocked_security_verification")
-        XCTAssertTrue((j["applicationEndpoints"] as? [Any] ?? []).isEmpty)
+final class RecordedTests: XCTestCase {
+    func rec(_ n: String) throws -> Data { try Data(contentsOf: Bundle.module.url(forResource: n, withExtension: "json", subdirectory: "Fixtures/recorded")!) }
+    func testFilmJSON() throws {
+        let f = try FilmJSON.decode(try rec("film-detail"))
+        XCTAssertEqual(f.slug, "fight-club"); XCTAssertEqual(f.releaseYear, 1999); XCTAssertEqual(f.directors.first?.name, "David Fincher")
+    }
+    func testPosterJSON() throws {
+        let p = try PosterJSON.decode(try rec("film-poster-230")); XCTAssertEqual(p.url.host, "a.ltrbxd.com"); XCTAssertFalse(p.shouldObfuscate)
+    }
+    func testPosterRejectsForeignHost() {
+        let d = Data(#"{"url":"https://evil.example/x.jpg","url2x":"https://evil.example/y.jpg","shouldObfuscate":false}"#.utf8)
+        XCTAssertThrowsError(try PosterJSON.decode(d))
+    }
+    func testLoginResponse() throws { XCTAssertTrue(try LoginResponse.decode(try rec("login-success")).succeeded) }
+    func testRecordedFilesHaveNoSecrets() throws {
+        for n in ["film-detail", "login-success"] {
+            let s = String(decoding: try rec(n), as: UTF8.self)
+            if s.contains("csrf") { XCTAssertTrue(s.contains("REDACTED")) }
+        }
     }
 }
 final class AuthTests: XCTestCase {

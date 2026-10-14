@@ -1,0 +1,34 @@
+[
+  {
+    "file": "login-success.json",
+    "url": "https://letterboxd.com/user/login.do",
+    "method": "POST",
+    "status": 200,
+    "sha256": "5ceb6f5a45935879c2b3815e8627b12657a1f62d53677b08c0a87f31a39b79b6",
+    "provenance": "Actual saved-profile Chromium response, csrf replaced with [REDACTED], no request header/cookie values captured"
+  },
+  {
+    "file": "film-poster-150.json",
+    "url": "https://letterboxd.com/film/fight-club/poster/std/150/",
+    "method": "GET",
+    "status": 200,
+    "sha256": "ff6654f4ce7f05c720be24883198402da3824e6f8c136d7440799f91454ebf5d",
+    "provenance": "Actual saved-profile Chromium response, csrf replaced with [REDACTED], no request header/cookie values captured"
+  },
+  {
+    "file": "film-detail.json",
+    "url": "https://letterboxd.com/film/fight-club/json/",
+    "method": "GET",
+    "status": 200,
+    "sha256": "1787fe2d7f6aaf257b8322a11edc68743a441076c26677cdb464d9a867037bec",
+    "provenance": "Actual saved-profile Chromium response, csrf replaced with [REDACTED], no request header/cookie values captured"
+  },
+  {
+    "file": "film-poster-230.json",
+    "url": "https://letterboxd.com/film/fight-club/poster/std/230/",
+    "method": "GET",
+    "status": 200,
+    "sha256": "ace680d5a9bcd8f36620c3685ace795fdcf752e1bb80ef64d7fdb13e8122dfcd",
+    "provenance": "Actual saved-profile Chromium response, csrf replaced with [REDACTED], no request header/cookie values captured"
+  }
+]

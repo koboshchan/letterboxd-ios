@@ -1,0 +1,379 @@
+{
+  "result": "saved-profile-success",
+  "initialIsolatedCapture": "HTTP403, no bypass attempted. Normal saved browser loaded site without challenge.",
+  "authentication": {
+    "method": "POST",
+    "url": "https://letterboxd.com/user/login.do",
+    "status": 200,
+    "result": "success",
+    "observations": [
+      "Email-address sign-in rejected; use username + password.",
+      "Response includes csrf; subsequent HTML initializes supermodelCSRF.",
+      "No cookie/session/header values published."
+    ]
+  },
+  "observedEndpoints": [
+    {
+      "contentType": "text/html;charset=utf-8",
+      "method": "GET",
+      "resourceType": "document",
+      "status": 200,
+      "url": "https://letterboxd.com/"
+    },
+    {
+      "contentType": "text/html;charset=utf-8",
+      "method": "GET",
+      "resourceType": "manifest",
+      "status": 200,
+      "url": "https://letterboxd.com/manifest.json",
+      "schema": {
+        "name": "str",
+        "short_name": "str",
+        "start_url": "str",
+        "display": "str",
+        "theme_color": "str",
+        "background_color": "str",
+        "description": "str",
+        "icons": "list",
+        "related_applications": "list"
+      }
+    },
+    {
+      "contentType": "text/json;charset=utf-8",
+      "method": "POST",
+      "resourceType": "xhr",
+      "status": 200,
+      "url": "https://letterboxd.com/user/login.do",
+      "schema": {
+        "result": "str",
+        "messages": "list",
+        "messagesOptions": "dict",
+        "csrf": "str"
+      },
+      "fixture": "fixtures/login-success.json"
+    },
+    {
+      "contentType": "text/json;charset=utf-8",
+      "method": "GET",
+      "resourceType": "fetch",
+      "status": 200,
+      "url": "https://letterboxd.com/film/fight-club/poster/std/150/",
+      "schema": {
+        "url": "str",
+        "url2x": "str",
+        "shouldObfuscate": "bool"
+      },
+      "fixture": "fixtures/film-poster-150.json"
+    },
+    {
+      "contentType": "text/json;charset=UTF-8",
+      "method": "POST",
+      "resourceType": "fetch",
+      "status": 200,
+      "url": "https://letterboxd.com/ajax/letterboxd-metadata/",
+      "schema": {
+        "result": "bool",
+        "csrf": "str"
+      }
+    },
+    {
+      "contentType": "text/html;charset=utf-8",
+      "method": "GET",
+      "resourceType": "fetch",
+      "status": 200,
+      "url": "https://letterboxd.com/csi/user-homepage/"
+    },
+    {
+      "contentType": "text/html;charset=utf-8",
+      "method": "GET",
+      "resourceType": "document",
+      "status": 200,
+      "url": "https://letterboxd.com/example-member/"
+    },
+    {
+      "contentType": "text/html;charset=utf-8",
+      "method": "GET",
+      "resourceType": "document",
+      "status": 200,
+      "url": "https://letterboxd.com/example-member/films/"
+    },
+    {
+      "contentType": "",
+      "method": "GET",
+      "resourceType": "document",
+      "status": 302,
+      "url": "https://letterboxd.com/example-member/films/diary/"
+    },
+    {
+      "contentType": "text/html;charset=utf-8",
+      "method": "GET",
+      "resourceType": "document",
+      "status": 200,
+      "url": "https://letterboxd.com/example-member/diary/"
+    },
+    {
+      "contentType": "",
+      "method": "GET",
+      "resourceType": "document",
+      "status": 302,
+      "url": "https://letterboxd.com/example-member/films/reviews/"
+    },
+    {
+      "contentType": "text/html;charset=utf-8",
+      "method": "GET",
+      "resourceType": "document",
+      "status": 200,
+      "url": "https://letterboxd.com/example-member/reviews/"
+    },
+    {
+      "contentType": "text/json;charset=UTF-8",
+      "formKeys": [],
+      "method": "GET",
+      "status": 200,
+      "url": "https://letterboxd.com/film/fight-club/json/",
+      "schema": {
+        "result": "bool",
+        "csrf": "str",
+        "lid": "str",
+        "uid": "str",
+        "type": "str",
+        "typeName": "str",
+        "id": "int",
+        "name": "str",
+        "image125": "str",
+        "image150": "str",
+        "image230": "str",
+        "releaseYear": "int",
+        "runTime": "int",
+        "slug": "str",
+        "url": "str",
+        "filmlistAction": "str",
+        "originalName": "NoneType",
+        "watchlistAction": "str",
+        "directors": "list"
+      },
+      "fixture": "fixtures/film-detail.json"
+    },
+    {
+      "contentType": "text/html;charset=utf-8",
+      "formKeys": [],
+      "method": "GET",
+      "status": 200,
+      "url": "https://letterboxd.com/film/fight-club/image-150/"
+    },
+    {
+      "contentType": "text/json;charset=UTF-8",
+      "formKeys": [],
+      "method": "GET",
+      "status": 200,
+      "url": "https://letterboxd.com/s/check-viewingable-relation",
+      "schema": {
+        "result": "bool",
+        "csrf": "str",
+        "liked": "bool",
+        "rating": "int",
+        "isInWatchlist": "bool",
+        "isDerivedRating": "bool"
+      },
+      "queryKeys": [
+        "viewingableUID"
+      ]
+    },
+    {
+      "contentType": "text/html;charset=utf-8",
+      "formKeys": [],
+      "method": "GET",
+      "queryKeys": [],
+      "status": 200,
+      "url": "https://letterboxd.com/film/fight-club/"
+    },
+    {
+      "contentType": "text/html;charset=utf-8",
+      "formKeys": [],
+      "method": "GET",
+      "queryKeys": [
+        "esiAllowUser",
+        "esiAllowCountry"
+      ],
+      "status": 200,
+      "url": "https://letterboxd.com/csi/film/fight-club/availability/"
+    },
+    {
+      "contentType": "text/html;charset=utf-8",
+      "formKeys": [],
+      "method": "GET",
+      "queryKeys": [
+        "esiAllowUser"
+      ],
+      "status": 200,
+      "url": "https://letterboxd.com/csi/film/fight-club/sidebar-user-actions/"
+    },
+    {
+      "contentType": "text/html;charset=utf-8",
+      "formKeys": [],
+      "method": "GET",
+      "queryKeys": [
+        "esiAllowUser",
+        "esiAllowCountry"
+      ],
+      "status": 200,
+      "url": "https://letterboxd.com/csi/film/fight-club/news/"
+    },
+    {
+      "contentType": "text/html;charset=utf-8",
+      "formKeys": [],
+      "method": "GET",
+      "queryKeys": [
+        "esiAllowUser"
+      ],
+      "status": 200,
+      "url": "https://letterboxd.com/csi/film/fight-club/friend-reviews/"
+    },
+    {
+      "contentType": "text/html;charset=utf-8",
+      "formKeys": [],
+      "method": "GET",
+      "queryKeys": [
+        "esiAllowUser"
+      ],
+      "status": 200,
+      "url": "https://letterboxd.com/csi/film/fight-club/friend-activity/"
+    },
+    {
+      "contentType": "text/html;charset=utf-8",
+      "formKeys": [],
+      "method": "GET",
+      "queryKeys": [],
+      "status": 200,
+      "url": "https://letterboxd.com/csi/film/fight-club/rating-histogram/"
+    },
+    {
+      "contentType": "text/html;charset=utf-8",
+      "formKeys": [],
+      "method": "GET",
+      "queryKeys": [
+        "esiAllowUser"
+      ],
+      "status": 200,
+      "url": "https://letterboxd.com/csi/film/fight-club/own-reviews/"
+    },
+    {
+      "contentType": "image/gif",
+      "formKeys": [],
+      "method": "GET",
+      "queryKeys": [
+        "o"
+      ],
+      "status": 200,
+      "url": "https://letterboxd.com/sm_stats_bug.do"
+    },
+    {
+      "contentType": "text/html;charset=utf-8",
+      "formKeys": [],
+      "method": "GET",
+      "queryKeys": [
+        "esiAllowUser"
+      ],
+      "status": 200,
+      "url": "https://letterboxd.com/csi/film/fight-club/liked-reviews/"
+    },
+    {
+      "contentType": "text/html;charset=UTF-8",
+      "formKeys": [],
+      "method": "GET",
+      "queryKeys": [],
+      "status": 200,
+      "url": "https://letterboxd.com/csi/film/fight-club/stats/"
+    },
+    {
+      "contentType": "text/html;charset=utf-8",
+      "formKeys": [],
+      "method": "GET",
+      "queryKeys": [],
+      "status": 200,
+      "url": "https://letterboxd.com/csi/film/fight-club/popular-lists/"
+    },
+    {
+      "contentType": "text/html;charset=utf-8",
+      "formKeys": [],
+      "method": "GET",
+      "queryKeys": [],
+      "status": 200,
+      "url": "https://letterboxd.com/csi/film/fight-club/recent-reviews/"
+    },
+    {
+      "contentType": "text/json;charset=utf-8",
+      "formKeys": [],
+      "method": "GET",
+      "queryKeys": [
+        "k"
+      ],
+      "status": 200,
+      "url": "https://letterboxd.com/film/fight-club/poster/std/230/",
+      "schema": {
+        "url": "str",
+        "url2x": "str",
+        "shouldObfuscate": "bool"
+      },
+      "fixture": "fixtures/film-poster-230.json"
+    }
+  ],
+  "liveWriteProof": {
+    "type": "one empty private list create/delete through native site UI",
+    "before": "No lists yet.",
+    "created": "Save success and edit page, You (private list) selected before saving.",
+    "deleted": "Native confirmation Delete clicked; fresh lists page No lists yet.",
+    "retention": "Site warns deleted list remains in account export deleted-items folder for 30 days.",
+    "networkLimitation": "A long networkidle capture timed out and its listener stopped before this test; write HTTP endpoint bodies are NOT recorded. UI roundtrip verified, not a recorded write fixture.",
+    "otherWrites": "No diary/review/rating/watchlist/follow/profile changes. Review dialog opened only for GET discovery, then Close without Save."
+  },
+  "limitations": [
+    "No full authenticated HAR export; bounded sanitized response fixtures and request metadata provided.",
+    "List write transport was not captured; new form/static JS evidence is unsubmitted and cannot prove endpoint success.",
+    "Personal relation response values are intentionally unpublished."
+  ],
+  "fixtures": [
+    {
+      "file": "login-success.json",
+      "url": "https://letterboxd.com/user/login.do",
+      "method": "POST",
+      "status": 200,
+      "sha256": "5ceb6f5a45935879c2b3815e8627b12657a1f62d53677b08c0a87f31a39b79b6",
+      "provenance": "Actual saved-profile Chromium response, csrf replaced with [REDACTED], no request header/cookie values captured"
+    },
+    {
+      "file": "film-poster-150.json",
+      "url": "https://letterboxd.com/film/fight-club/poster/std/150/",
+      "method": "GET",
+      "status": 200,
+      "sha256": "ff6654f4ce7f05c720be24883198402da3824e6f8c136d7440799f91454ebf5d",
+      "provenance": "Actual saved-profile Chromium response, csrf replaced with [REDACTED], no request header/cookie values captured"
+    },
+    {
+      "file": "film-detail.json",
+      "url": "https://letterboxd.com/film/fight-club/json/",
+      "method": "GET",
+      "status": 200,
+      "sha256": "1787fe2d7f6aaf257b8322a11edc68743a441076c26677cdb464d9a867037bec",
+      "provenance": "Actual saved-profile Chromium response, csrf replaced with [REDACTED], no request header/cookie values captured"
+    },
+    {
+      "file": "film-poster-230.json",
+      "url": "https://letterboxd.com/film/fight-club/poster/std/230/",
+      "method": "GET",
+      "status": 200,
+      "sha256": "ace680d5a9bcd8f36620c3685ace795fdcf752e1bb80ef64d7fdb13e8122dfcd",
+      "provenance": "Actual saved-profile Chromium response, csrf replaced with [REDACTED], no request header/cookie values captured"
+    }
+  ],
+  "followup": {
+    "authShapes": "auth-shapes.sanitized.json",
+    "listForm": "list-form-shapes.sanitized.json",
+    "htmlFixtures": "bounded-fixture-manifest.json",
+    "relationQueryKeys": [
+      "viewingableUID"
+    ],
+    "searchFragment": "GET /s/search/fight%20club/ returns HTML (observed)",
+    "staticWriteEvidence": "static-write-evidence.sanitized.json"
+  }
+}

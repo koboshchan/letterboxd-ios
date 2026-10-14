@@ -1,0 +1,25 @@
+{
+  "result": true,
+  "csrf": "[REDACTED]",
+  "lid": "2a9q",
+  "uid": "film:51568",
+  "type": "film",
+  "typeName": "film",
+  "id": 51568,
+  "name": "Fight Club",
+  "image125": "/film/fight-club/image-125/",
+  "image150": "/film/fight-club/image-150/",
+  "image230": "/film/fight-club/image-230/",
+  "releaseYear": 1999,
+  "runTime": 139,
+  "slug": "fight-club",
+  "url": "/film/fight-club/",
+  "filmlistAction": "null",
+  "originalName": null,
+  "watchlistAction": "/film/fight-club/add-to-watchlist/",
+  "directors": [
+    {
+      "name": "David Fincher"
+    }
+  ]
+}
