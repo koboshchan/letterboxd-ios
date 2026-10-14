@@ -105,3 +105,14 @@ final class FullTextTests: XCTestCase {
         let ok = try? await s.fullReviewText(path: "/s/full-text/viewing:1/"); XCTAssertEqual(ok, "x")
     }
 }
+
+final class FullTextPathTests: XCTestCase {
+    func testAcceptsOnlyCapturedShape() throws {
+        XCTAssertEqual(try Validate.fullTextPath("/s/full-text/viewing:123456/"), "/s/full-text/viewing:123456/")
+        for bad in ["/s/full-text/", "/s/full-text/viewing:1", "/s/full-text/viewing:1/?a=b", "/s/full-text/viewing:1/#x", "/s/full-text/viewing:1/../x/",
+                    "/s/full-text/viewing:%31/", "/s/full-text/viewing:1%2F", "/s/full-text/viewing:1%252e%252e/", "/s/full-text/viewing:1/a/",
+                    "//evil.com/s/full-text/viewing:1/", "/s/full-text/viewing:a/", "https://u:p@letterboxd.com/s/full-text/viewing:1/", "/s/full-text/viewing:1/\n", "/s/full-text/film:1/"] {
+            XCTAssertThrowsError(try Validate.fullTextPath(bad), bad)
+        }
+    }
+}

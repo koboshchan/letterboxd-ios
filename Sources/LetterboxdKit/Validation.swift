@@ -70,3 +70,11 @@ public enum Validate {
         return try? url(u)
     }
 }
+
+extension Validate {
+    /// Only the captured shape: exactly /s/full-text/viewing:<digits>/ . No query, fragment, userinfo, encoding or traversal.
+    public static func fullTextPath(_ p: String) throws -> String {
+        guard p.range(of: "^/s/full-text/viewing:[0-9]{1,18}/\\z", options: .regularExpression) != nil else { throw LetterboxdError.invalidInput("full text path") }
+        return p
+    }
+}

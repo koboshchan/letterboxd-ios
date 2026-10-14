@@ -174,7 +174,7 @@ public enum Parsers {
             let rating = try a.select("svg.glyph.-rating").first().flatMap { stars(try $0.attr("aria-label")) }
             let date = try a.select("time.timestamp").first().flatMap { df.date(from: try $0.attr("datetime")) }
             var full: String? = try body.attr("data-full-text-url")
-            if let f = full, !(f.hasPrefix("/s/full-text/") && !f.contains("..") && !f.contains("?")) { full = nil }
+            if let f = full, (try? Validate.fullTextPath(f)) == nil { full = nil }
             if full?.isEmpty == true { full = nil }
             out.append(FilmReview(link: link, author: name, username: user, rating: rating, text: text, date: date, fullTextPath: full))
         }

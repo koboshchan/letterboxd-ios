@@ -77,7 +77,7 @@ public final class PublicWebService: LetterboxdService {
         return try Parsers.filmGrid(html: try await fetcher.text(url([role.rawValue, s], page: page), forceRefresh: refresh), page: page)
     }
     public func fullReviewText(path: String) async throws -> String {
-        guard path.hasPrefix("/s/full-text/"), !path.contains(".."), !path.contains("?"), let u = URL(string: "https://letterboxd.com" + path) else { throw LetterboxdError.invalidInput("path") }
+        guard let u = URL(string: "https://letterboxd.com" + (try Validate.fullTextPath(path))) else { throw LetterboxdError.invalidInput("path") }
         return try Parsers.fullText(html: try await fetcher.text(try Validate.url(u), accept: "text/html"))
     }
     public func filmReviews(slug: String, page: Int, refresh: Bool) async throws -> Page<FilmReview> {
