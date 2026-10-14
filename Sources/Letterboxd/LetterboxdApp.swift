@@ -15,6 +15,8 @@ enum Theme {
 final class AppEnvironment {
     let service: LetterboxdService
     let auth: AuthAuthority
+    /// Watchlist/like client; nil in the UI-test host (no network writes there).
+    var actions: FilmActions? = nil
     /// Member being viewed; set only from a server-validated session (empty while signed out, never shown then).
     private(set) var username = ""
     /// The only writer: bound to the validated session (see AccountModel.onUsernameChange). No manual override exists.
@@ -33,7 +35,9 @@ final class AppEnvironment {
         // Credentials come only from the in-memory, server-validated AuthAuthority (never read raw from the Keychain).
         let auth = AuthAuthority()
         let transport = URLSessionTransport(cookieHeader: { auth.cookieHeader() })
-        return AppEnvironment(service: PublicWebService(fetcher: Fetcher(transport: transport, auth: auth)), auth: auth)
+        let e = AppEnvironment(service: PublicWebService(fetcher: Fetcher(transport: transport, auth: auth)), auth: auth)
+        e.actions = FilmActions(transport: transport, auth: auth)
+        return e
     }
 }
 
@@ -102,5 +106,5 @@ struct GateScreen: View {
 
 enum Legal {
     /// Disclosures kept from the former About screen; shown on the sign-in gate.
-    static let notice = "Unofficial client, not affiliated with Letterboxd and not using its API. Pages are fetched only when you open or refresh a screen and challenges or blocks are never bypassed. Letterboxd's terms prohibit automated gathering without authorization; use at your own discretion. Watchlist, list and other account changes are not supported."
+    static let notice = "Unofficial client, not affiliated with Letterboxd and not using its API. Pages are fetched only when you open or refresh a screen and challenges or blocks are never bypassed. Letterboxd's terms prohibit automated gathering without authorization; use at your own discretion. Watchlist and like are supported; diary, review, list and profile edits are not."
 }
