@@ -42,7 +42,6 @@ struct SearchScreen: View {
         .navigationTitle("Search")
         .searchable(text: $query, prompt: "Films")
         .onSubmit(of: .search) { run() }
-        .navigationDestination(for: NetworkRoute.self) { MemberListScreen(route: $0) }
     }
     private func run() {
         let q = query.trimmingCharacters(in: .whitespaces); guard !q.isEmpty else { return }
