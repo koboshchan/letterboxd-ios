@@ -148,6 +148,11 @@ public enum Parsers {
     }
 
     // MARK: members
+    static func avatar(_ raw: String?) -> URL? {
+        guard let raw, let u = URL(string: raw), u.scheme == "https", u.port == nil, u.user == nil,
+              let h = u.host, h == "a.ltrbxd.com" || h == "s.ltrbxd.com" else { return nil }
+        return u
+    }
     public static func members(html: String, page: Int) throws -> Page<MemberSummary> {
         let doc = try SwiftSoup.parse(html, "https://letterboxd.com/")
         var out: [MemberSummary] = []
@@ -155,7 +160,7 @@ public enum Parsers {
             guard let a = try p.select("a.name").first() else { continue }
             let href = try a.attr("href").trimmingCharacters(in: CharacterSet(charactersIn: "/"))
             guard let u = try? Validate.username(href) else { continue }
-            out.append(MemberSummary(username: u, displayName: try a.text(), avatarURL: URL(string: try p.select("img").first()?.attr("src") ?? "")))
+            out.append(MemberSummary(username: u, displayName: try a.text(), avatarURL: avatar(try p.select("img").first()?.attr("src"))))
         }
         return Page(items: out, page: page, hasNext: !(try doc.select("a.next").isEmpty()))
     }

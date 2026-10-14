@@ -11,7 +11,6 @@ public protocol LetterboxdService: Sendable {
     func browse(_ kind: BrowseKind, page: Int, refresh: Bool) async throws -> Page<FilmSummary>
     func film(slug: String, refresh: Bool) async throws -> FilmDetail
     func searchFilms(query: String, page: Int) async throws -> Page<FilmSummary>
-    func searchMembers(query: String, page: Int) async throws -> Page<MemberSummary>
     func following(username: String, page: Int, refresh: Bool) async throws -> Page<MemberSummary>
     func followers(username: String, page: Int, refresh: Bool) async throws -> Page<MemberSummary>
     func personFilms(role: PersonRole, slug: String, page: Int, refresh: Bool) async throws -> Page<FilmSummary>
@@ -85,11 +84,7 @@ public final class PublicWebService: LetterboxdService {
         let q = try Self.cleanQuery(query)
         return try Parsers.filmGrid(html: try await fetcher.text(url(["s", "search", "films", q], page: page)), page: page)
     }
-    public func searchMembers(query: String, page: Int) async throws -> Page<MemberSummary> {
-        let q = try Self.cleanQuery(query)
-        return try Parsers.members(html: try await fetcher.text(url(["s", "search", "members", q], page: page)), page: page)
-    }
-    /// Real pages observed: /{user}/following/ and /{user}/followers/ (table of .person-summary rows, a.next paging).
+   /// Real pages observed: /{user}/following/ and /{user}/followers/ (table of .person-summary rows, a.next paging).
     public func following(username: String, page: Int, refresh: Bool) async throws -> Page<MemberSummary> {
         let u = try Validate.username(username)
         return try Parsers.members(html: try await fetcher.text(url([u, "following"], page: page), forceRefresh: refresh), page: page)

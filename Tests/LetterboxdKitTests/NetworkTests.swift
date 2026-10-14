@@ -18,11 +18,11 @@ final class NetworkTests: XCTestCase {
         XCTAssertTrue(try Parsers.members(html: h, page: 1).items.isEmpty)
     }
 
-    /// Row markup copied from a real GET of /koboshchan/following/ (public page, single member row, follow-button cell removed).
+    /// Row markup copied from a real GET of /koboshchan/following/ (structure only; username and avatar identifiers replaced with synthetic values; follow-button cell removed). The followers page uses the identical row markup.
     func testRealFollowingRowShape() throws {
         let p = try Parsers.members(html: try fixtureText("real-following-row", "html"), page: 1)
         XCTAssertEqual(p.items.count, 1)
-        XCTAssertEqual(p.items[0].username, "vertsdu"); XCTAssertEqual(p.items[0].displayName, "vertsdu")
+        XCTAssertEqual(p.items[0].username, "example-member"); XCTAssertEqual(p.items[0].displayName, "example-member")
         XCTAssertEqual(p.items[0].avatarURL?.host, "a.ltrbxd.com")
     }
 
@@ -63,5 +63,14 @@ final class NetworkTests: XCTestCase {
         for bad in ["http://image.tmdb.org/t/p/w500/a.jpg", "https://evil.example/t/p/w500/a.jpg", "https://image.tmdb.org/other/a.jpg", "https://image.tmdb.org:8443/t/p/a.jpg", "https://image.tmdb.org.evil.com/t/p/a.jpg"] {
             XCTAssertNil(Parsers.personPortrait(html: #"<img class="js-tmdb-person" data-image="\#(bad)">"#), bad)
         }
+    }
+
+    func testMembersAvatarHostsPagingDuplicatesAndBadLinks() throws {
+        let h = #"<html><body><div class="person-summary"><a class="avatar" href="/amy/"><img src="https://a.ltrbxd.com/x.jpg"></a><h3><a href="/amy/" class="name">amy</a></h3></div><div class="person-summary"><a class="avatar" href="/bob/"><img src="https://evil.example/x.jpg"></a><h3><a href="/bob/" class="name">bob</a></h3></div><div class="person-summary"><a class="avatar" href="/cy/"><img src="http://a.ltrbxd.com/x.jpg"></a><h3><a href="/cy/" class="name">cy</a></h3></div><div class="person-summary"><a class="avatar" href="/amy/"><img src="https://a.ltrbxd.com/x.jpg"></a><h3><a href="/amy/" class="name">amy</a></h3></div><div class="person-summary"><a class="name" href="/../etc/">bad</a></div><a class="next" href="/x/page/2/">Older</a></body></html>"#
+        let p = try Parsers.members(html: h, page: 1)
+        XCTAssertEqual(p.items.map(\.username), ["amy", "bob", "cy", "amy"], "parser preserves order; the loader dedupes by id")
+        XCTAssertNotNil(p.items[0].avatarURL); XCTAssertNil(p.items[1].avatarURL); XCTAssertNil(p.items[2].avatarURL)
+        XCTAssertTrue(p.hasNext)
+        XCTAssertFalse(try Parsers.members(html: "<html></html>", page: 2).hasNext)
     }
 }
