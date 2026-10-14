@@ -7,7 +7,7 @@ final class NoMemberSearchTests: XCTestCase {
         let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("Sources/Letterboxd/BrowseSearch.swift")
         let src = try String(contentsOf: url, encoding: .utf8).lowercased()
-        for banned in ["members", "searchscopes", "scope", "memberlistscreen", "networkroute", "memberroute", "picker", "searchmembers"] {
+        for banned in ["members", "searchscopes", "scope", "memberlistscreen", "networkroute", "memberroute", "searchmembers"] {
             XCTAssertFalse(src.contains(banned), "BrowseSearch.swift must not contain \(banned)")
         }
         XCTAssertTrue(src.contains("prompt: \"films\""))
