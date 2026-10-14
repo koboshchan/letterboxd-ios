@@ -17,4 +17,12 @@ final class NetworkTests: XCTestCase {
         let h = #"<div class="person-summary"><a href="https://evil.example/x/" class="name">Evil</a></div><div class="person-summary"><a href="/../etc/" class="name">Bad</a></div>"#
         XCTAssertTrue(try Parsers.members(html: h, page: 1).items.isEmpty)
     }
+
+    /// Row markup copied from a real GET of /koboshchan/following/ (public page, single member row, follow-button cell removed).
+    func testRealFollowingRowShape() throws {
+        let p = try Parsers.members(html: try fixtureText("real-following-row", "html"), page: 1)
+        XCTAssertEqual(p.items.count, 1)
+        XCTAssertEqual(p.items[0].username, "vertsdu"); XCTAssertEqual(p.items[0].displayName, "vertsdu")
+        XCTAssertEqual(p.items[0].avatarURL?.host, "a.ltrbxd.com")
+    }
 }
