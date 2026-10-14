@@ -9,8 +9,7 @@ struct FilmScreen: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                BackdropHero(url: loader?.value?.backdropURL, loading: loader?.value == nil && loader?.error == nil)
-                    .padding(.horizontal, -20).padding(.top, -20)
+                Color.clear.frame(height: 190)   // room for the backdrop; the hero itself is a background so it can't collapse the layout
                 HStack(alignment: .bottom, spacing: 16) {
                     PosterView(film: summary).frame(width: 130)
                         .shadow(color: .black.opacity(0.35), radius: 14, y: 6)
@@ -23,7 +22,6 @@ struct FilmScreen: View {
                         }
                     }
                 }
-                .padding(.top, -96).zIndex(1)   // poster rises over the hero's lower edge
                 if let d = loader?.value {
                     if let t = d.tagline { Text(t.uppercased()).font(.caption.weight(.semibold)).foregroundStyle(.secondary).tracking(1) }
                     if let s = d.synopsis { Text(s).font(.body).lineSpacing(3) }
@@ -43,6 +41,9 @@ struct FilmScreen: View {
                 NavigationLink { FilmReviewsScreen(film: summary) } label: { Label("Reviews", systemImage: "text.bubble") }.buttonStyle(.bordered)
                 NavigationLink { FilmListsScreen(film: summary) } label: { Label("Lists featuring this film", systemImage: "list.bullet.rectangle") }.buttonStyle(.bordered)
             }.padding(20)
+        }
+        .background(alignment: .top) {
+            BackdropHero(url: loader?.value?.backdropURL, loading: loader?.value == nil && loader?.error == nil).ignoresSafeArea(edges: .top)
         }
         .ignoresSafeArea(edges: .top)
         .navigationBarBackButtonHidden(true)

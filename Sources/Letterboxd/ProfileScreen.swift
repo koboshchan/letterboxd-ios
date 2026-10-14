@@ -171,7 +171,7 @@ struct ListsView: View {
             if let e = loader.error { ErrorCard(error: e, retry: { Task { await loader.loadFirst(refresh: true) } }).listRowBackground(Color.clear) }
             if loader.isLoading { HStack { Spacer(); ProgressView(); Spacer() }.listRowBackground(Color.clear) }
         }
-        .listStyle(.plain)
+        .listStyle(.plain).contentMargins(.bottom, 24, for: .scrollContent)
         .refreshable { await loader.loadFirst(refresh: true) }
         .task { await loader.loadFirst() }
     }
@@ -205,7 +205,7 @@ struct MemberListScreen: View {
                     if let e = l.error { ErrorCard(error: e, retry: { Task { await l.loadFirst(refresh: true) } }, link: URL(string: "https://letterboxd.com/\(route.username)/\(route.kind.rawValue.lowercased())/")).listRowBackground(Color.clear).listRowSeparator(.hidden) }
                     if l.isLoading { HStack { Spacer(); ProgressView(); Spacer() }.listRowBackground(Color.clear) }
                 }
-                .listStyle(.plain)
+                .listStyle(.plain).contentMargins(.bottom, 24, for: .scrollContent)
                 .refreshable { await l.loadFirst(refresh: true) }
                 .task { await l.loadFirst() }
             } else { ProgressView() }
