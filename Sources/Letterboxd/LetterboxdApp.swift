@@ -59,6 +59,7 @@ struct RootView: View {
             Tab("About", systemImage: "info.circle", value: 3) { NavigationStack { AboutScreen() } }
         }
         .background(Color.black)
+        .id(account.epoch)   // every auth change rebuilds all tabs and their loaded models
         // Any auth change (including logout to nil) resets the viewed username and rebuilds all loaded models.
         .onChange(of: account.username) { _, u in env.username = u ?? AppEnvironment.defaultUsername }
         .sheet(isPresented: $showSignIn) { SignInScreen() }

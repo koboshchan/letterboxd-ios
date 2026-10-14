@@ -79,19 +79,21 @@ public final class LiveAccountService: AccountService, @unchecked Sendable {
     public init(store: SessionStore) { self.store = store }
     public func signIn(email: String, password: String) async throws -> Session { throw AuthError.verificationRequired }
 
-    public func complete(cookies: [WebCookie], fetch: HomepageFetcher, now: Date = Date()) async throws -> Session {
+    public func complete(cookies: [WebCookie], fetch: HomepageFetcher, now: Date = Date(), isCurrent: @Sendable () -> Bool = { true }) async throws -> Session {
         guard let jar = SessionCookies.accept(cookies, now: now, storedAt: now) else { throw AuthError.notSignedIn }
         let r = try await fetch(Session(username: "", cookies: jar, storedAt: now))
         guard r.status == 200, let name = IdentityCheck.username(fromHomepage: r.html) else { throw AuthError.notSignedIn }
+        guard isCurrent() else { throw AuthError.notSignedIn }   // logout/new login happened while validating: persist nothing
         let s = Session(username: name, cookies: jar, storedAt: now)
         try store.save(s); return s
     }
     /// Launch-time restore: re-validates stored cookie attributes and re-confirms identity with the server.
     /// Invalid, expired or mismatched sessions are removed. A network failure keeps the stored session untouched.
-    public func restore(fetch: HomepageFetcher, now: Date = Date()) async throws -> Session? {
+    public func restore(fetch: HomepageFetcher, now: Date = Date(), isCurrent: @Sendable () -> Bool = { true }) async throws -> Session? {
         guard let s = try? store.load() else { try store.clear(); return nil }
         guard let jar = SessionCookies.accept(s.cookies, now: now, storedAt: s.storedAt) else { try store.clear(); return nil }
         let r = try await fetch(Session(username: s.username, cookies: jar, storedAt: s.storedAt))
+        guard isCurrent() else { return nil }   // obsolete: neither clear nor return a session
         guard r.status == 200, let name = IdentityCheck.username(fromHomepage: r.html), name.lowercased() == s.username.lowercased() else {
             try store.clear(); return nil
         }

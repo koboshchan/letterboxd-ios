@@ -72,6 +72,7 @@ public struct URLSessionTransport: HTTPTransport {
 public enum BlockDetector {
     /// Detects Cloudflare-style challenge/denial pages. We never try to get past them.
     public static func check(_ r: HTTPResult) throws {
+        if (300..<400).contains(r.status) { throw LetterboxdError.http(status: r.status) }
         if r.status == 404 { throw LetterboxdError.notFound }
         if r.status == 403 || r.status == 429 || r.status == 503 { throw LetterboxdError.blocked(status: r.status) }
         if r.status >= 400 { throw LetterboxdError.http(status: r.status) }
@@ -131,13 +132,17 @@ public final class Fetcher: Sendable {
         try Task.checkCancellation()
         let u = try Validate.url(url)
         let g = auth.generation
-        if !forceRefresh, let d = await cache.get(u, partition: g) { return String(decoding: d, as: UTF8.self) }
+        if !forceRefresh, let d = await cache.get(u, partition: g) {
+            guard auth.generation == g else { throw LetterboxdError.cancelled }
+            return String(decoding: d, as: UTF8.self)
+        }
         let r = try await transport.get(u, accept: accept)
         try Task.checkCancellation()
         // Auth state changed while in flight: drop the response, never cache or render it.
         guard auth.generation == g else { throw LetterboxdError.cancelled }
         try BlockDetector.check(r)
         await cache.set(u, r.data, partition: g)
+        guard auth.generation == g else { throw LetterboxdError.cancelled }
         return String(decoding: r.data, as: UTF8.self)
     }
 }

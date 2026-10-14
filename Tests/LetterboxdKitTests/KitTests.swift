@@ -382,3 +382,26 @@ final class RedirectStub: URLProtocol, @unchecked Sendable {
     }
     override func stopLoading() {}
 }
+
+actor Gate { var open=false; func wait() async { while !open { try? await Task.sleep(nanoseconds: 2_000_000) } }; func release(){ open=true } }
+final class AccountRaceTests: XCTestCase {
+    func testBlockDetectorRejectsAll3xx() {
+        for c in [301,302,303,307,308] { XCTAssertThrowsError(try BlockDetector.check(HTTPResult(data: Data("moved".utf8), status: c))) }
+        XCTAssertNoThrow(try BlockDetector.check(HTTPResult(data: Data("ok".utf8), status: 200)))
+    }
+    func testFetcherRejects3xxAndDoesNotCacheIt() async throws {
+        let f = Fetcher(transport: StubTransport { _ in HTTPResult(data: Data("redir".utf8), status: 302) }); let u = URL(string: "https://letterboxd.com/x/")!
+        do { _ = try await f.text(u); XCTFail() } catch {}
+        let c = await f.cache.get(u, partition: 0); XCTAssertNil(c)
+    }
+    func testLateCompleteAfterLogoutPersistsNothing() async throws {
+        let st = InMemorySessionStore(); let svc = LiveAccountService(store: st); let gate = Gate()
+        let flag = FlagBox()
+        let c = WebCookie(name: "letterboxd.user.CURRENT", value: "v", domain: "letterboxd.com", expires: Date().addingTimeInterval(9999))
+        let t = Task { try await svc.complete(cookies: [c], fetch: { _ in await gate.wait(); return (200, "<script>person = { username: \"u\", loggedIn: false }</script><script>person.username = \"u\"; person.loggedIn = true;</script>") }, isCurrent: { flag.on }) }
+        flag.on = false; await gate.release()
+        do { _ = try await t.value; XCTFail("must refuse") } catch {}
+        XCTAssertNil(try st.load())
+    }
+}
+final class FlagBox: @unchecked Sendable { var on = true }
