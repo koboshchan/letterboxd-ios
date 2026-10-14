@@ -22,18 +22,18 @@ struct PosterView: View {
     let film: FilmSummary
     @State private var resolved: URL?
     var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 6).fill(Theme.card)
-            if let u = film.posterURL ?? resolved {
-                AsyncImage(url: u) { img in img.resizable().scaledToFill() } placeholder: { Color(white: 0.12) }
-            } else {
-                VStack(spacing: 4) {
-                    Text(film.title).font(.caption.weight(.semibold)).multilineTextAlignment(.center).lineLimit(4)
-                    if let y = film.year { Text(String(y)).font(.caption2).foregroundStyle(.secondary) }
-                }.padding(8)
+        Theme.card
+            .aspectRatio(2.0/3.0, contentMode: .fit)
+            .overlay {
+                if let u = film.posterURL ?? resolved {
+                    AsyncImage(url: u) { img in img.resizable().scaledToFill() } placeholder: { Color(white: 0.12) }
+                } else {
+                    VStack(spacing: 4) {
+                        Text(film.title).font(.caption.weight(.semibold)).multilineTextAlignment(.center).lineLimit(4)
+                        if let y = film.year { Text(String(y)).font(.caption2).foregroundStyle(.secondary) }
+                    }.padding(8)
+                }
             }
-        }
-        .aspectRatio(2.0/3.0, contentMode: .fit)
         .clipShape(RoundedRectangle(cornerRadius: 6))
         .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.hairline))
         .accessibilityLabel(film.title)
@@ -61,6 +61,7 @@ struct PosterGrid: View {
             if let e = loader.error { ErrorCard(error: e, retry: { Task { await loader.loadFirst(refresh: true) } }).padding() }
             if loader.isEmptyLoaded { EmptyCard(symbol: "film", title: emptyTitle, text: emptyBody).padding() }
         }
+        .contentMargins(.bottom, 24, for: .scrollContent)
         .refreshable { await loader.loadFirst(refresh: true) }
         .task { await loader.loadFirst() }
         .navigationDestination(for: FilmSummary.self) { FilmScreen(summary: $0) }

@@ -6,7 +6,7 @@ enum ProfileTab: String, CaseIterable, Identifiable { case films = "Films", diar
 
 struct ProfileScreen: View {
     @Environment(AppEnvironment.self) private var env
-    @State private var tab: ProfileTab = .films
+    @State private var tab: ProfileTab = ProfileTab.allCases[Int(AppEnvironment.arg("-UISegment") ?? "0") ?? 0]
     @State private var profile: ValueLoader<Profile>?
     @State private var films: PagedLoader<FilmSummary>?
     @State private var watch: PagedLoader<FilmSummary>?
@@ -109,8 +109,9 @@ struct EntryRow: View {
     let entry: ActivityEntry
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            AsyncImage(url: entry.posterURL) { $0.resizable().scaledToFill() } placeholder: { Theme.card }
-                .frame(width: 52, height: 78).clipShape(RoundedRectangle(cornerRadius: 5)).overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(Theme.hairline))
+            Theme.card.frame(width: 52, height: 78)
+                .overlay { AsyncImage(url: entry.posterURL) { $0.resizable().scaledToFill() } placeholder: { Color.clear } }
+                .clipShape(RoundedRectangle(cornerRadius: 5)).overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(Theme.hairline))
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
                     Text(entry.filmTitle).font(.headline).lineLimit(2)

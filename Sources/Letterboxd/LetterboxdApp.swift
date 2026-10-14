@@ -28,6 +28,8 @@ final class AppEnvironment {
     let service: LetterboxdService
     let isFixtureMode: Bool
     var username = "koboshchan"
+    /// Launch-argument hooks for deterministic screenshots only (-UITab N, -UISegment N, -UIFilm slug).
+    static func arg(_ k: String) -> String? { let a = ProcessInfo.processInfo.arguments; return a.firstIndex(of: k).flatMap { a.indices.contains($0 + 1) ? a[$0 + 1] : nil } }
     init(service: LetterboxdService, fixture: Bool) { self.service = service; self.isFixtureMode = fixture }
     static func make() -> AppEnvironment {
         if ProcessInfo.processInfo.arguments.contains("-UIFixtureMode") { return AppEnvironment(service: FixtureService(), fixture: true) }
@@ -37,12 +39,14 @@ final class AppEnvironment {
 
 struct RootView: View {
     @Environment(AppEnvironment.self) private var env
+    @State private var browsePath: [FilmSummary] = AppEnvironment.arg("-UIFilm").map { [FilmSummary(slug: $0, title: AppEnvironment.arg("-UIFilmTitle") ?? $0, year: nil)] } ?? []
+    @State private var selection = Int(AppEnvironment.arg("-UITab") ?? "0") ?? 0
     var body: some View {
-        TabView {
-            Tab("Profile", systemImage: "person.crop.circle") { NavigationStack { ProfileScreen() }.fixtureBanner(env.isFixtureMode) }
-            Tab("Browse", systemImage: "film.stack") { NavigationStack { BrowseScreen() }.fixtureBanner(env.isFixtureMode) }
-            Tab("Search", systemImage: "magnifyingglass", role: .search) { NavigationStack { SearchScreen() }.fixtureBanner(env.isFixtureMode) }
-            Tab("About", systemImage: "info.circle") { NavigationStack { AboutScreen() } }
+        TabView(selection: $selection) {
+            Tab("Profile", systemImage: "person.crop.circle", value: 0) { NavigationStack { ProfileScreen().fixtureBanner(env.isFixtureMode) } }
+            Tab("Browse", systemImage: "film.stack", value: 1) { NavigationStack(path: $browsePath) { BrowseScreen().fixtureBanner(env.isFixtureMode) } }
+            Tab("Search", systemImage: "magnifyingglass", value: 2, role: .search) { NavigationStack { SearchScreen().fixtureBanner(env.isFixtureMode) } }
+            Tab("About", systemImage: "info.circle", value: 3) { NavigationStack { AboutScreen() } }
         }
         .background(Color.black)
     }

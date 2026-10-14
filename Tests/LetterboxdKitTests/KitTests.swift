@@ -2,7 +2,8 @@ import XCTest
 @testable import LetterboxdKit
 
 func fixture(_ n: String, _ e: String) throws -> Data {
-    try Data(contentsOf: Bundle.module.url(forResource: n, withExtension: e, subdirectory: "Fixtures")!)
+    let u = Bundle.module.url(forResource: n, withExtension: e, subdirectory: "Fixtures") ?? Bundle.module.url(forResource: n, withExtension: e, subdirectory: "Fixtures/capture")!
+    return try Data(contentsOf: u)
 }
 func fixtureText(_ n: String, _ e: String) throws -> String { String(decoding: try fixture(n, e), as: UTF8.self) }
 
@@ -114,6 +115,23 @@ final class KitTests: XCTestCase {
         let svc = PublicWebService(fetcher: Fetcher(transport: StubTransport { _ in HTTPResult(data: try fixture("rss", "xml"), status: 200) }))
         let d = try await svc.diary(username: "kobosh", refresh: false); XCTAssertEqual(d.count, 2)
         let r = try await svc.reviews(username: "kobosh", refresh: false); XCTAssertEqual(r.count, 1)
+    }
+}
+final class CaptureTests: XCTestCase {
+    func testRecordedCaptureShowsBlockedHomepageAndNoAppEndpoints() throws {
+        let j = try JSONSerialization.jsonObject(with: try fixture("endpoint-report", "json")) as! [String: Any]
+        XCTAssertEqual(j["result"] as? String, "blocked_security_verification")
+        XCTAssertTrue((j["applicationEndpoints"] as? [Any] ?? []).isEmpty)
+    }
+}
+final class AuthTests: XCTestCase {
+    func testStoreRoundTripAndClear() throws {
+        let s = InMemorySessionStore(); XCTAssertNil(try s.load())
+        try s.save(Session(username: "u", cookies: ["a": "b"])); XCTAssertEqual(try s.load()?.username, "u")
+        try s.clear(); XCTAssertNil(try s.load())
+    }
+    func testUnavailableServiceIsHonest() async {
+        do { _ = try await UnavailableAccountService().createList(name: "x", isPrivate: true); XCTFail() } catch { if case AuthError.unsupported = error {} else { XCTFail() } }
     }
 }
 actor SeenURLs { var all: [URL] = []; func add(_ u: URL) { all.append(u) } }

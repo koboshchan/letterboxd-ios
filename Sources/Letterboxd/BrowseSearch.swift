@@ -4,7 +4,7 @@ import LetterboxdKit
 struct BrowseScreen: View {
     @Environment(AppEnvironment.self) private var env
     @State private var kind: BrowseKind = .popular
-    @State private var loaders: [BrowseKind: PagedLoader<FilmSummary>] = [:]
+    @State private var store = BrowseStore()
     var body: some View {
         VStack(spacing: 0) {
             Picker("List", selection: $kind) { ForEach(BrowseKind.allCases, id: \.self) { Text($0.title).tag($0) } }
@@ -14,12 +14,15 @@ struct BrowseScreen: View {
         }
         .background(Color.black).navigationTitle("Browse")
     }
-    private func loader(_ k: BrowseKind) -> PagedLoader<FilmSummary> {
+    private func loader(_ k: BrowseKind) -> PagedLoader<FilmSummary> { store.loader(k, service: env.service) }
+}
+
+@MainActor final class BrowseStore {
+    private var loaders: [BrowseKind: PagedLoader<FilmSummary>] = [:]
+    func loader(_ k: BrowseKind, service svc: LetterboxdService) -> PagedLoader<FilmSummary> {
         if let l = loaders[k] { return l }
-        let svc = env.service
         let l = PagedLoader<FilmSummary> { p, r in try await svc.browse(k, page: p, refresh: r) }
-        DispatchQueue.main.async { loaders[k] = l }
-        return l
+        loaders[k] = l; return l
     }
 }
 

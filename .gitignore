@@ -4,3 +4,5 @@ DerivedData/
 .DS_Store
 *.xcresult
 .swiftpm/
+raw-private.har
+*.private.json

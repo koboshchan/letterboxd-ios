@@ -57,6 +57,6 @@ struct AboutScreen: View {
             }
             Section("Mode") { Text(env.isFixtureMode ? "Fixture data (UI test mode)" : "Live public data") }
             Section { Link("letterboxd.com", destination: URL(string: "https://letterboxd.com/")!) }
-        }.scrollContentBackground(.hidden).background(Color.black).navigationTitle("About")
+        }.contentMargins(.bottom, 24, for: .scrollContent).scrollContentBackground(.hidden).background(Color.black).navigationTitle("About")
     }
 }
