@@ -300,6 +300,9 @@ final class AuthTransportTests: XCTestCase {
         let cached = await f.cache.get(u, partition: auth.generation); XCTAssertNil(cached)
         let cachedOld = await f.cache.get(u, partition: auth.generation - 1); XCTAssertNil(cachedOld)
     }
+    func testRevokeWithoutSessionDoesNotBumpGeneration() {
+        let a = AuthAuthority(); let g = a.generation; a.revoke(); XCTAssertEqual(a.generation, g)
+    }
     func testNoCookieWithoutValidation() {
         let auth = AuthAuthority()
         XCTAssertNil(auth.cookieHeader())   // fresh/offline-unvalidated: nothing is sent

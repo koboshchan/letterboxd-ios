@@ -109,7 +109,8 @@ public final class AuthAuthority: @unchecked Sendable {
     public var username: String? { lock.lock(); defer { lock.unlock() }; return session?.username }
     /// Call only after the server confirmed this session.
     public func setValidated(_ s: Session) { lock.lock(); session = s; gen += 1; lock.unlock() }
-    public func revoke() { lock.lock(); session = nil; gen += 1; lock.unlock() }
+    /// Bumps the generation only if a session was actually held (a no-op revoke must not disturb in-flight guest loads).
+    public func revoke() { lock.lock(); if session != nil { session = nil; gen += 1 }; lock.unlock() }
     /// Cookie header or nil (nil = send no credentials). Expired cookies are never included.
     public func cookieHeader(now: Date = Date()) -> String? {
         lock.lock(); defer { lock.unlock() }

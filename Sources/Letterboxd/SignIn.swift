@@ -23,11 +23,12 @@ final class AccountModel {
     /// Restores a stored session only after cookie attributes and the server both confirm it.
     func restore() async {
         defer { validating = false }
+        let before = username
         do {
             if let s = try await service.restore(fetch: Self.fetchHomepage) { auth?.setValidated(s); username = s.username }
             else { auth?.revoke(); username = nil }
         } catch { auth?.revoke(); username = nil }  // unverifiable (e.g. offline): no credentials sent until validated
-        epoch += 1
+        if username != before { epoch += 1 }   // rebuild views only on a real account change
     }
     func complete(with cookies: [HTTPCookie]) async -> Bool {
         let mapped = cookies.map { WebCookie(name: $0.name, value: $0.value, domain: $0.domain, path: $0.path, expires: $0.expiresDate, secure: $0.isSecure) }
