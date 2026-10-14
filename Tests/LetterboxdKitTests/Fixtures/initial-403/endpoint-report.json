@@ -1,0 +1,65 @@
+{
+  "result": "blocked_security_verification",
+  "captureMode": "isolated logged-out headless Chromium, no saved profile",
+  "navigation": "https://letterboxd.com/",
+  "observed": [
+    {
+      "method": "GET",
+      "url": "https://letterboxd.com/",
+      "status": 307,
+      "contentType": "x-unknown",
+      "trigger": "homepage navigation or browser page subresource"
+    },
+    {
+      "method": "GET",
+      "url": "https://letterboxd.com/",
+      "status": 403,
+      "contentType": "text/html; charset=UTF-8",
+      "trigger": "homepage navigation or browser page subresource"
+    },
+    {
+      "method": "GET",
+      "url": "https://letterboxd.com/[security-verification-path-redacted]",
+      "status": 200,
+      "contentType": "application/javascript; charset=UTF-8",
+      "trigger": "homepage navigation or browser page subresource"
+    },
+    {
+      "method": "GET",
+      "url": "https://challenges.cloudflare.com/[security-verification-path-redacted]",
+      "status": 200,
+      "contentType": "application/javascript; charset=UTF-8",
+      "trigger": "homepage navigation or browser page subresource"
+    },
+    {
+      "method": "POST",
+      "url": "https://letterboxd.com/[security-verification-path-redacted]",
+      "status": -1,
+      "contentType": "x-unknown",
+      "trigger": "homepage navigation or browser page subresource",
+      "note": "Blocked before transmission by GET-only request interception; not a submitted POST."
+    }
+  ],
+  "applicationEndpoints": [],
+  "responseFixtures": [],
+  "notAttempted": [
+    "login",
+    "popular films",
+    "search",
+    "profile",
+    "films",
+    "diary",
+    "reviews",
+    "lists",
+    "film detail",
+    "all account writes"
+  ],
+  "blockingEvidence": {
+    "status": 403,
+    "title": "Just a moment...",
+    "text": "Performing security verification"
+  },
+  "privacy": "Public HAR strips ALL headers, cookies, query strings, bodies, challenge identifiers. raw-private.har is local-only chmod600; never copy to public repository. No credentials read, no login, no writes, no original user state changed.",
+  "conclusion": "No actual JSON/ajax application endpoints or schemas were observed. Do not invent endpoints or label synthetic fixtures as recorded. Explicit no challenge bypass respected; stopped after first blocked homepage navigation.",
+  "delivery": "Direct task158816db message failed Task not found; coordinator must relay sanitized artifacts."
+}

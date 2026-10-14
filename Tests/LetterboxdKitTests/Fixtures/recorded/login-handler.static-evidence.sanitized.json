@@ -1,0 +1,49 @@
+{
+  "form": [
+    {
+      "action": "#",
+      "data": [
+        {
+          "name": "data-captcha-action",
+          "value": "signin"
+        },
+        {
+          "name": "data-url",
+          "value": "/user/login.do"
+        }
+      ],
+      "fields": [
+        {
+          "empty": false,
+          "name": "__csrf",
+          "type": "hidden"
+        },
+        {
+          "empty": true,
+          "name": "authenticationCode",
+          "type": "hidden"
+        },
+        {
+          "empty": true,
+          "name": "username",
+          "type": "email"
+        },
+        {
+          "empty": true,
+          "name": "password",
+          "type": "password"
+        },
+        {
+          "checked": false,
+          "empty": false,
+          "name": "remember",
+          "staticCheckboxValue": "true",
+          "type": "checkbox"
+        }
+      ],
+      "method": "post"
+    }
+  ],
+  "handler": "$(`form.signin`).submit(function(){let e=$(this),n=$(`#signin-message`),r=e.find(`.buttons input`).parent(`.button-container`);if(!e.hasClass(`signin-processing`)){e.addClass(`signin-processing`);let a=e.data(`spinner`)||globals.spinners.spinner_14_20272f;r.lbSpinner({size:14,fallback:a});let s=0,c=async function(){let t=e.data(`captcha-action`),a=new FormData(e[0]);if(t){let e=await i(t);a.append(`captchaResponse`,e),a.append(`captchaAction`,t)}let l=new URLSearchParams(a).toString();$.ajax({type:`POST`,async:!0,url:e.data(`url`),data:l,dataType:`json`,xhrFields:{withCredentials:!0},error:function(t,n,i){e.removeClass(`signin-processing`),r.lbSpinner(`stop`),bxd.showMessages(`error`,[`An error occurred.  Please try again later.`])},success:function(t,i,a){if(n.stop(!0),t.result==`success`)window.location.reload(!0);else if(t.result==`totpRequired`){let t=new o({},window.bxd);t.status.then(n=>{t.hide(),e.find(`input[name=authenticationCode]`).val(n),c()},()=>{e.removeClass(`signin-processing`),r.lbSpinner(`stop`)})}else{if(s<3&&t.messages[0].indexOf(`expired`)!==-1){s++,e.find(`input[name=__csrf]`).val(t.csrf),c();return}if(e.find(`input[name=authenticationCode]`).val(``),e.removeClass(`signin-processing`),r.lbSpinner(`stop`),renderMobile){if(t.messages){let e=$(`<p></p>`).html(t.messages[0]);bxd.colorboxModalConfirm(e,{title:`Sign-in failed`,ok:!1,cancel:`Close`})}}else t.messages&&(e.is(`#signin`)?(n.html(`<p>`+t.messages[0]+`</p>`),$(`body`).addClass(`show-signin-message`)):bxd.showMessages(`error`,t.messages))}}})};bxd.dismissMessages(),$(`body`).removeClass(`show-signin-message`),e.find(`input[name=__csrf]`).val(t()),c()}return!1}),location.search.match(/register/)){let e=``;if(location.href.indexOf(`register=true`)!=-1)e=location.href.substring(location.href.indexOf(`register=true`)+13);else if(location.href.indexOf(`/register/`)!=-1){let t=location.href.substring(location.href.indexOf(`/register/`)+10);t.length&&(e=`token=`+t)}person.signUpEmailAddress&&(e=e+`&emailAddress=`+encodeURIComponent(person.signUpEmailAddress)),e=e.replace(/\\?/,`&`);let t=$(`#header .create-account-menu a`);if(t.length<=0&&(t=$(`a.create-account-link`)),t.length>0){let n=t.attr(`href`);n+=`?register=true`,e.length&&(n+=`&`+e);let r={href:n};renderMobile&&(r.speed=0),t.colorbox(r),t.trigger(`click`)}}}}),e().then(()=>{$.fn.protectUnsavedChanges&&($(`#user-update`).protectUnsavedChanges({warning:`Your changes have not been saved yet.`}),$(`#comment-form`).protectUnsavedChanges({warning:`You have not posted your comment yet.`})),$(`#sign-out`).on(`ajax-success`,function(e,t){t.result&&location.reload(!0),t.messages&&bxd.showMessages(t.result?`success`:`error`,t.messages)});let e=$(`.progress-panel`),t={container:e.find(`.progress-container`),textwrapper:e.find(`.progress-counter`),textcount:e.find(`.js-progress-count`),textpercent:e.find(`.progress-percentage`),count:e.data(`count`),total:e.data(`total`),bar:e.find(`.progress-bar`),up:function(){t.count++,t.stretch()},down:function(){t.count--,t.stretch()},stretch:function(){let e=t.total===0?0:Math.floor(t.count*100/t.total);t.textcount.text(r(t.count)),t.textpercent.text(e),t.bar.animate({width:e+`%`},200,`linear`,function(){t.count<=0?(t.container.addClass(`zero-count`),t.container.removeClass(`near-end`)):e>99?(t.container.addClass(`near-end`),t.container.removeClass(`zero-count`)):(t.container.removeClass(`zero-count`),t.container.removeClass(`near-end`))})}};e.length&&n.subscribe(a,e=>{e.isWatched?t.up():t.down()});let i=null;if(!renderMobile){let e=$(`<li></li>`);e.append($(`#header .js-nav-account a.toggle-menu`).clone()),$(`#header nav ul.subnav`).prepend(e),$(`#header .js-nav-account`).on(`mouseenter`,function(){$(`.dropdown-menu[role=\"menu\"]`).filter(`:visible`).length||(clearTimeout(i),$(`#header nav ul.subnav`).show())}).on(`mouseleave`,function(){i=setTimeout(function(){$(`#header nav ul.subnav`).hide()},300)}),$(document).on(`click`,`#header .js-nav-account a.toggle-menu`,function(e){e.preventDefault(),window.isTouchOnly&&$(`#header nav ul.subnav`).is(`:visible`)?$(`#header nav ul.subnav`).hide():$(`#header nav ul.subnav`).show()})}t.stretch()});",
+  "source": "https://s.ltrbxd.com/static/js/es/chunks/C3q9HG-U.js"
+}

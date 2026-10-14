@@ -1,0 +1,61 @@
+{
+  "evidence": "Static reconstruction from actual current site DOM + served JavaScript. Historical raw captured successful login response but NOT its request body/header values. Do not label this observed successful request serialization.",
+  "method": "POST",
+  "url": "https://letterboxd.com/user/login.do",
+  "headers": {
+    "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+    "Accept": "application/json, text/javascript, */*; q=0.01",
+    "X-Requested-With": "XMLHttpRequest",
+    "Cookie": "<same-origin cookie jar from bootstrap, no manual values>"
+  },
+  "encoding": "new URLSearchParams(new FormData(form)).toString(); UTF-8 application/x-www-form-urlencoded, percent encoding and + for spaces",
+  "orderedFields": [
+    {
+      "name": "__csrf",
+      "value": "<window.supermodelCSRF from freshly loaded site bootstrap>",
+      "empty": false
+    },
+    {
+      "name": "authenticationCode",
+      "value": "",
+      "empty": true
+    },
+    {
+      "name": "username",
+      "value": "<username, NOT email>"
+    },
+    {
+      "name": "password",
+      "value": "<password>"
+    },
+    {
+      "name": "remember",
+      "value": "true",
+      "conditional": "only if checkbox checked; OMIT when unchecked; never serialize false"
+    },
+    {
+      "name": "captchaResponse",
+      "value": "<token returned by site's normal Turnstile integration>",
+      "conditional": "appended when form data-captcha-action present; current DOM has signin"
+    },
+    {
+      "name": "captchaAction",
+      "value": "signin",
+      "conditional": "same as captchaResponse"
+    }
+  ],
+  "bodyTemplateUnchecked": "__csrf=<URLENCODED_CSRF>&authenticationCode=&username=<URLENCODED_USERNAME>&password=<URLENCODED_PASSWORD>&captchaResponse=<URLENCODED_NORMAL_SITE_TOKEN>&captchaAction=signin",
+  "bodyTemplateChecked": "__csrf=<URLENCODED_CSRF>&authenticationCode=&username=<URLENCODED_USERNAME>&password=<URLENCODED_PASSWORD>&remember=true&captchaResponse=<URLENCODED_NORMAL_SITE_TOKEN>&captchaAction=signin",
+  "csrf": "GET normal site HTML using same cookie jar; bootstrap window.supermodelCSRF copied into input[name=__csrf] immediately before FormData creation. Success JSON may rotate csrf; helper setter updates bootstrap and hidden inputs.",
+  "credentials": "jQuery xhrFields.withCredentials=true. Current origin uses its normal cookie jar. CSRF cookie com.xk72.webparts.csrf HttpOnly; read bootstrap, not cookie value.",
+  "remember": "Current desktop DOM unchecked, checkbox constant value true. JS auto-checks when window.isMobile. Historical successful request checkbox state was not captured, so unknown.",
+  "responses": "Historical actual POST /user/login.do 200 {result:'success',messages:...,messagesOptions:...,csrf:'<redacted>'}. Handler supports totpRequired then fills authenticationCode and serializes again. No 2FA was triggered in this investigation.",
+  "captcha": "DOM currently data-captcha-action=signin. Handler awaits normal site captcha function before appending fields. No alternative token generation, bypass, replay or challenge circumvention performed. Native implementation must treat unavailable normal captcha flow as a real capability blocker rather than omit it.",
+  "sources": [
+    "https://s.ltrbxd.com/static/js/es/chunks/C3q9HG-U.js",
+    "https://s.ltrbxd.com/static/js/es/chunks/WlWVCv9e.js",
+    "https://s.ltrbxd.com/static/js/es/chunks/DhUmhPks.js",
+    "https://s.ltrbxd.com/static/js/es/chunks/xIsJHI0F.js"
+  ],
+  "accountActions": "Read-only historical analysis + GET static assets; no logout/relogin or writes."
+}
