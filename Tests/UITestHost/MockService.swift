@@ -50,7 +50,10 @@ final class MockService: LetterboxdService, @unchecked Sendable {
         if query.lowercased().contains("boom") { throw LetterboxdError.network("mock offline") }
         return Page(items: [FilmSummary(slug: "found-film", title: "Found Film", year: 2010)], page: 1, hasNext: false)
     }
-    func searchMembers(query: String, page: Int) async throws -> Page<MemberSummary> { Page(items: [], page: 1, hasNext: false) }
+    func searchMembers(query: String, page: Int) async throws -> Page<MemberSummary> {
+        if query.lowercased().contains("nothing") { return Page(items: [], page: 1, hasNext: false) }
+        return Page(items: [MemberSummary(username: "annabel", displayName: "Annabel", avatarURL: nil)], page: 1, hasNext: false)
+    }
     func following(username: String, page: Int, refresh: Bool) async throws -> Page<MemberSummary> { try network("friend", username, page) }
     func followers(username: String, page: Int, refresh: Bool) async throws -> Page<MemberSummary> { try network("fan", username, page) }
     private func network(_ p: String, _ u: String, _ page: Int) throws -> Page<MemberSummary> {

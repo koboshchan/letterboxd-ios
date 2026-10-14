@@ -252,4 +252,15 @@ final class ControlTests: XCTestCase {
         app.navigationBars.buttons.firstMatch.tap(); app.buttons["count-followers"].tap()
         wait(app.staticTexts["No followers yet"])
     }
+
+    func testMemberSearchOpensReadOnlyProfileWithoutChangingRoot() {
+        let app = launch(); app.tabBars.buttons["Search"].tap()
+        let f = app.searchFields.firstMatch; wait(f); f.tap(); f.typeText("ann\n")
+        app.buttons["Members"].tap()
+        let row = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'member-result-'")).firstMatch
+        wait(row, 8, "member results"); row.tap()
+        XCTAssertFalse(app.buttons["Change member"].exists)
+        app.navigationBars.buttons.firstMatch.tap()
+        app.tabBars.buttons["Profile"].tap(); wait(app.staticTexts["Tester Person"], 8, "root identity unchanged")
+    }
 }
