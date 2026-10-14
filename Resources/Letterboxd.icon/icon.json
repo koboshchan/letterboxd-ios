@@ -1,14 +1,14 @@
 {
   "fill": {
-    "automatic-gradient": "srgb:0.0,0.55,0.28,1.0"
+    "solid": "srgb:0.114,0.137,0.157,1.0"
   },
   "groups": [
     {
       "layers": [
         {
-          "image-name": "mark.svg",
-          "name": "mark",
-          "glass": false
+          "image-name": "orange.svg",
+          "name": "orange",
+          "glass": true
         }
       ],
       "shadow": {
@@ -23,9 +23,9 @@
     {
       "layers": [
         {
-          "image-name": "page.svg",
-          "name": "page",
-          "glass": false
+          "image-name": "green.svg",
+          "name": "green",
+          "glass": true
         }
       ],
       "shadow": {
@@ -40,9 +40,43 @@
     {
       "layers": [
         {
-          "image-name": "strip.svg",
-          "name": "strip",
-          "glass": false
+          "image-name": "blue.svg",
+          "name": "blue",
+          "glass": true
+        }
+      ],
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.5
+      },
+      "translucency": {
+        "enabled": false,
+        "value": 0.5
+      }
+    },
+    {
+      "layers": [
+        {
+          "image-name": "lens-l.svg",
+          "name": "lens-l",
+          "glass": true
+        }
+      ],
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.5
+      },
+      "translucency": {
+        "enabled": false,
+        "value": 0.5
+      }
+    },
+    {
+      "layers": [
+        {
+          "image-name": "lens-r.svg",
+          "name": "lens-r",
+          "glass": true
         }
       ],
       "shadow": {
@@ -61,13 +95,13 @@
   "fill-specializations": [
     {
       "value": {
-        "automatic-gradient": "srgb:0.0,0.55,0.28,1.0"
+        "solid": "srgb:0.114,0.137,0.157,1.0"
       }
     },
     {
       "appearance": "dark",
       "value": {
-        "solid": "srgb:0.0,0.0,0.0,1.0"
+        "solid": "srgb:0.078,0.094,0.110,1.0"
       }
     },
     {
