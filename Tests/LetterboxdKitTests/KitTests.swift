@@ -173,6 +173,15 @@ final class SignInTests: XCTestCase {
         XCTAssertNil(try? s.load())
     }
     func testBadUsernameRejected() { XCTAssertNil(SessionCookies.accept(good, username: "../x")) }
+    func testLoginFormRefusesWithoutBootstrapOrChallenge() {
+        XCTAssertThrowsError(try LoginForm.body(csrf: nil, username: "u", password: "p", remember: false, captchaToken: "t")) { XCTAssertEqual($0 as? LoginForm.Missing, .bootstrapCSRF) }
+        XCTAssertThrowsError(try LoginForm.body(csrf: "c", username: "u", password: "p", remember: false, captchaToken: nil)) { XCTAssertEqual($0 as? LoginForm.Missing, .challengeToken) }
+    }
+    func testUncheckedRememberOmitted() throws {
+        let b = try LoginForm.body(csrf: "c", username: "u", password: "p", remember: false, captchaToken: "t")
+        XCTAssertFalse(b.contains("remember")); XCTAssertTrue(b.hasSuffix("captchaAction=signin"))
+        XCTAssertTrue(try LoginForm.body(csrf: "c", username: "u", password: "p", remember: true, captchaToken: "t").contains("remember=true"))
+    }
     func testSignOutClears() async throws {
         let s = InMemorySessionStore(); try s.save(Session(username: "u", cookies: [:]))
         try await LiveAccountService(store: s).signOut(); XCTAssertNil(try s.load())

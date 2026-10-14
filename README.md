@@ -1,0 +1,3 @@
+
+## Sign-in status
+Not implemented, and earlier notes calling it "built" were wrong. The site's sign-in form needs a CSRF value from the page bootstrap (window.supermodelCSRF) and a Turnstile token only the site's own page can produce. This client never fakes or bypasses either, so there is no native password POST. Supported today is read-only browsing of public pages and RSS. A web view sign-in that hands cookies to the Keychain is the planned route (\`LiveAccountService.complete\` accepts only letterboxd.com cookies) but the web view UI is not built and nothing has been verified live. Watchlist and list writes are unsupported.
