@@ -30,7 +30,10 @@ final class FilmActionsModel {
     }
     var canRefresh: Bool { notice == .unconfirmed || notice == .loadFailed }
 
-    private func apply(_ s: FilmState) { watchlist = s.watchlist ? .on : .off; liked = s.liked ? .on : .off }
+    private func apply(_ s: FilmState) { applyState(s); onConfirmed?() }
+    /// Set by the app: drops cached reads after a confirmed write.
+    var onConfirmed: (() -> Void)?
+    private func applyState(_ s: FilmState) { watchlist = s.watchlist ? .on : .off; liked = s.liked ? .on : .off }
 
     /// uncertain: which flags become unknown if this fails after the request may have been sent.
     private func run(sent: Bool, _ body: @escaping (FilmActionsClient) async throws -> FilmState, onFail: Notice) async {
@@ -54,11 +57,19 @@ final class FilmActionsModel {
     }
     func refresh() async { await run(sent: false, { [slug] c in try await c.state(slug: slug) }, onFail: .loadFailed) }
     func toggleWatchlist() async {
-        let target = watchlist != .on
+        // Unknown state: read the server first. Add is an explicit set-true, never a blind toggle; a failed read sends nothing.
+        // The button said "Add" while unknown, so the intent is set-true; an already-watchlisted film must NOT be removed.
+        let wasUnknown = watchlist == .unknown
+        if wasUnknown { await refresh(); guard watchlist != .unknown else { return } }
+        let target = wasUnknown ? true : watchlist != .on
+        if wasUnknown && watchlist == .on { return }
         await run(sent: true, { [slug] c in try await c.setWatchlist(slug: slug, on: target) }, onFail: .unconfirmed)
     }
     func toggleLike() async {
-        let target = liked != .on
+        let wasUnknown = liked == .unknown
+        if wasUnknown { await refresh(); guard liked != .unknown else { return } }
+        let target = wasUnknown ? true : liked != .on
+        if wasUnknown && liked == .on { return }
         await run(sent: true, { [slug] c in try await c.setLike(slug: slug, liked: target) }, onFail: .unconfirmed)
     }
 }
@@ -113,3 +124,4 @@ struct FilmContextMenu: ViewModifier {
     }
 }
 extension View { func filmContextMenu(_ f: FilmSummary) -> some View { modifier(FilmContextMenu(film: f)) } }
+

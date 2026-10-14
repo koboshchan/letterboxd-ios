@@ -27,7 +27,7 @@ final class AppEnvironment {
         if modelsGeneration != auth.generation { models = [:]; modelsGeneration = auth.generation }
         if let m = models[slug] { return m }
         if models.count >= 200 { models = [:] }
-        let m = FilmActionsModel(client: actions, auth: auth, slug: slug); models[slug] = m; return m
+        let m = FilmActionsModel(client: actions, auth: auth, slug: slug); m.onConfirmed = { [service] in Task { await (service as? PublicWebService)?.invalidateReads() } }; models[slug] = m; return m
     }
     /// Number of pushed screens (film detail and its children) that want the bottom nav hidden; nav shows only at 0.
     var bottomNavHiders = 0
@@ -49,7 +49,7 @@ final class AppEnvironment {
         // Credentials come only from the in-memory, server-validated AuthAuthority (never read raw from the Keychain).
         let auth = AuthAuthority()
         let transport = URLSessionTransport(cookieHeader: { auth.cookieHeader() })
-        let e = AppEnvironment(service: PublicWebService(fetcher: Fetcher(transport: transport, auth: auth)), auth: auth)
+        let e = AppEnvironment(service: PublicWebService(fetcher: Fetcher(transport: transport, auth: auth), reads: ReadStore(directory: FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?.appendingPathComponent("LetterboxdReads", isDirectory: true))), auth: auth)
         e.actions = FilmActions(transport: transport, auth: auth)
         let svc = e.service as? PublicWebService
         e.clearCaches = { await svc?.clearCaches(); await ImagePipeline.shared.clearAll() }

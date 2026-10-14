@@ -29,9 +29,22 @@ public protocol LetterboxdService: Sendable {
 public final class PublicWebService: LetterboxdService {
     let fetcher: Fetcher
     let base = URL(string: "https://letterboxd.com")!
-    public init(fetcher: Fetcher = Fetcher()) { self.fetcher = fetcher }
+    let reads: ReadStore?
+    public init(fetcher: Fetcher = Fetcher(), reads: ReadStore? = nil) { self.fetcher = fetcher; self.reads = reads }
+    /// Read-through for the signed-in member only. Skipped when signed out or on pull-to-refresh (which still refills it).
+    private func cached<T: Codable & Sendable>(_ type: T.Type, key: String, refresh: Bool, _ load: () async throws -> T) async throws -> T {
+        guard let reads, let ns = auth.username else { return try await load() }
+        let g = auth.generation, e = await reads.currentEpoch()
+        if !refresh, let v = await reads.get(T.self, ns: ns, key: key), auth.generation == g { return v }
+        let v = try await load()
+        guard auth.generation == g else { throw LetterboxdError.cancelled }
+        await reads.set(v, ns: ns, key: key, epoch: e)
+        return v
+    }
+    /// A write happened: drop dependent reads so the next view is fresh.
+    public func invalidateReads() async { if let ns = auth.username { await reads?.invalidate(ns: ns, prefix: "") } }
     public var auth: AuthAuthority { fetcher.auth }
-    public func clearCaches() async { await fetcher.clearCache() }
+    public func clearCaches() async { await fetcher.clearCache(); await reads?.clear() }
 
     private func url(_ parts: [String], page: Int = 1, query: [URLQueryItem] = []) -> URL {
         var u = base
@@ -43,15 +56,17 @@ public final class PublicWebService: LetterboxdService {
     }
     public func profile(username: String, refresh: Bool) async throws -> Profile {
         let u = try Validate.username(username)
-        return try Parsers.profile(html: try await fetcher.text(url([u]), forceRefresh: refresh), username: u)
+        return try await cached(Profile.self, key: "profile-\(u)", refresh: refresh) { try Parsers.profile(html: try await fetcher.text(url([u]), forceRefresh: refresh), username: u) }
     }
     public func films(username: String, page: Int, refresh: Bool) async throws -> Page<FilmSummary> {
         let u = try Validate.username(username)
-        return try Parsers.filmGrid(html: try await fetcher.text(url([u, "films"], page: page), forceRefresh: refresh), page: page)
+        let c = try await cached(CachedPage<FilmSummary>.self, key: "films-\(u)-\(page)", refresh: refresh) { let p = try Parsers.filmGrid(html: try await fetcher.text(url([u, "films"], page: page), forceRefresh: refresh), page: page); return CachedPage(items: p.items, page: p.page, hasNext: p.hasNext) }
+        return Page(items: c.items, page: c.page, hasNext: c.hasNext)
     }
     public func watchlist(username: String, page: Int, refresh: Bool) async throws -> Page<FilmSummary> {
         let u = try Validate.username(username)
-        return try Parsers.filmGrid(html: try await fetcher.text(url([u, "watchlist"], page: page), forceRefresh: refresh), page: page)
+        let c = try await cached(CachedPage<FilmSummary>.self, key: "watchlist-\(u)-\(page)", refresh: refresh) { let p = try Parsers.filmGrid(html: try await fetcher.text(url([u, "watchlist"], page: page), forceRefresh: refresh), page: page); return CachedPage(items: p.items, page: p.page, hasNext: p.hasNext) }
+        return Page(items: c.items, page: c.page, hasNext: c.hasNext)
     }
     public func diary(username: String, refresh: Bool) async throws -> [ActivityEntry] {
         let u = try Validate.username(username)
