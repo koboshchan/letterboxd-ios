@@ -103,6 +103,8 @@ public actor ResponseCache {
     private struct Entry { let data: Data; let at: Date }
     private struct Key: Hashable { let url: URL; let partition: Int }
     private var store: [Key: Entry] = [:]
+    private var epoch = 0
+    public func currentEpoch() -> Int { epoch }
     private let ttl: TimeInterval
     private let now: @Sendable () -> Date
     /// Test seams: run inside the actor just before get/set return, i.e. in the window where Fetcher is suspended.
@@ -114,8 +116,9 @@ public actor ResponseCache {
         guard let e = store[k], now().timeIntervalSince(e.at) < ttl else { store[k] = nil; return nil }
         afterGet?(); return e.data
     }
-    public func set(_ u: URL, _ d: Data, partition: Int = 0) { store[Key(url: u, partition: partition)] = Entry(data: d, at: now()); afterSet?() }
-    public func clear() { store.removeAll() }
+    public func set(_ u: URL, _ d: Data, partition: Int = 0, epoch e: Int? = nil) { if let e, e != epoch { return }; store[Key(url: u, partition: partition)] = Entry(data: d, at: now()); afterSet?() }
+    /// Purge and fence: a response that started before this call can no longer be stored.
+    public func clear() { epoch += 1; store.removeAll() }
 }
 
 /// The ONLY source of credentials for requests. Holds the in-memory, server-validated session (never the raw Keychain).
@@ -147,11 +150,13 @@ public final class Fetcher: Sendable {
     public init(transport: HTTPTransport = URLSessionTransport(), cache: ResponseCache = ResponseCache(), auth: AuthAuthority = AuthAuthority()) {
         self.transport = transport; self.cache = cache; self.auth = auth
     }
+    public func clearCache() async { await cache.clear() }
     /// forceRefresh is used by pull-to-refresh (a user action) and bypasses the cache.
     public func text(_ url: URL, accept: String = "text/html", forceRefresh: Bool = false) async throws -> String {
         try Task.checkCancellation()
         let u = try Validate.url(url)
         let g = auth.generation
+        let ce = await cache.currentEpoch()
         if !forceRefresh, let d = await cache.get(u, partition: g) {
             guard auth.generation == g else { throw LetterboxdError.cancelled }
             return String(decoding: d, as: UTF8.self)
@@ -161,7 +166,7 @@ public final class Fetcher: Sendable {
         // Auth state changed while in flight: drop the response, never cache or render it.
         guard auth.generation == g else { throw LetterboxdError.cancelled }
         try BlockDetector.check(r)
-        await cache.set(u, r.data, partition: g)
+        await cache.set(u, r.data, partition: g, epoch: ce)
         guard auth.generation == g else { throw LetterboxdError.cancelled }
         return String(decoding: r.data, as: UTF8.self)
     }

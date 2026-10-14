@@ -31,6 +31,7 @@ public final class PublicWebService: LetterboxdService {
     let base = URL(string: "https://letterboxd.com")!
     public init(fetcher: Fetcher = Fetcher()) { self.fetcher = fetcher }
     public var auth: AuthAuthority { fetcher.auth }
+    public func clearCaches() async { await fetcher.clearCache() }
 
     private func url(_ parts: [String], page: Int = 1, query: [URLQueryItem] = []) -> URL {
         var u = base

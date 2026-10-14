@@ -2,22 +2,61 @@ import SwiftUI
 import LetterboxdKit
 
 /// Tappable cast/crew chips. Each one is a parsed, validated Letterboxd person link.
+/// Shelf-style person tiles: 76pt circular photo, 2-line centered name (80pt wide), role/character caption, horizontal scroll.
 struct CreditSection: View {
     let title: String
     let credits: [Credit]
     var body: some View {
         if !credits.isEmpty {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 12) {
                 Text(title.uppercased()).font(.caption.weight(.semibold)).foregroundStyle(.secondary).tracking(1)
-                FlowLayout(spacing: 8) {
-                    ForEach(credits) { c in
-                        NavigationLink(value: c) {
-                            Text(c.name).font(.subheadline).padding(.horizontal, 12).padding(.vertical, 7)
-                                .background(.thinMaterial, in: Capsule())
-                        }.buttonStyle(.plain).accessibilityLabel("\(c.name), \(c.role.rawValue)")
+                ScrollView(.horizontal, showsIndicators: false) {
+                    // Lazy: portraits are fetched only for tiles that scroll on screen.
+                    LazyHStack(alignment: .top, spacing: 14) {
+                        ForEach(credits) { c in
+                            NavigationLink(value: c) { CreditTile(credit: c) }.buttonStyle(.plain)
+                                .accessibilityLabel("\(c.name), \(c.role.rawValue)").accessibilityIdentifier("credit-\(c.role.rawValue)-\(c.slug)")
+                        }
                     }
                 }
             }
+        }
+    }
+}
+
+/// Caps simultaneous person-page reads so a long cast list can't fan out.
+actor PortraitLimiter {
+    static let shared = PortraitLimiter()
+    private var running = 0
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+    func acquire() async { if running < 3 { running += 1 } else { await withCheckedContinuation { waiters.append($0) } } }
+    func release() { if waiters.isEmpty { running -= 1 } else { waiters.removeFirst().resume() } }
+}
+
+struct CreditTile: View {
+    @Environment(AppEnvironment.self) private var env
+    let credit: Credit
+    @State private var portrait: URL?
+    var body: some View {
+        VStack(spacing: 6) {
+            ZStack {
+                Color.secondary.opacity(0.18)
+                if let portrait {
+                    CachedImage(url: portrait) { Color.clear }
+                } else {
+                    Image(systemName: "person.fill").font(.title3).foregroundStyle(.secondary.opacity(0.7))
+                }
+            }
+            .frame(width: 76, height: 76).clipShape(Circle())
+            Text(credit.name).font(.caption).lineLimit(2, reservesSpace: true).multilineTextAlignment(.center).frame(width: 80)
+            Text(credit.role.rawValue.capitalized).font(.caption2).foregroundStyle(.secondary).lineLimit(1).frame(width: 80)
+        }
+        .task(id: credit.id) {
+            guard portrait == nil else { return }
+            await PortraitLimiter.shared.acquire()
+            let u = await env.service.personPortrait(role: credit.role, slug: credit.slug)
+            await PortraitLimiter.shared.release()
+            portrait = u
         }
     }
 }
@@ -56,7 +95,7 @@ struct PersonScreen: View {
             if let loader {
                 VStack(spacing: 0) {
                     if let portrait {
-                        AsyncImage(url: portrait) { $0.resizable().scaledToFill() } placeholder: { Color.secondary.opacity(0.15) }
+                        CachedImage(url: portrait) { Color.secondary.opacity(0.15) }
                             .frame(width: 96, height: 128).clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                             .padding(.top, 8).accessibilityLabel(credit.name)
                     }

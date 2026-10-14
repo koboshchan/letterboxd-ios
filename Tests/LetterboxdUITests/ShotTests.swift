@@ -22,8 +22,8 @@ final class ShotTests: XCTestCase {
         seg.buttons["Films"].tap()
         app.buttons["count-followers"].tap(); w(app.staticTexts["fan 0"]); shot(app, "08-followers")
         app.staticTexts["fan 1"].tap(); w(app.navigationBars["fan-1"]); shot(app, "09-member-profile")
-        app.tabBars.buttons["Browse"].tap(); app.tabBars.buttons["Profile"].tap(); app.tabBars.buttons["Profile"].tap()
-        app.tabBars.buttons["Browse"].tap(); w(app.buttons["poster-popular-2"].firstMatch); shot(app, "10-browse")
+        app.buttons["tab-Browse"].tap(); app.buttons["tab-Profile"].tap(); app.buttons["tab-Profile"].tap()
+        app.buttons["tab-Browse"].tap(); w(app.buttons["poster-popular-2"].firstMatch); shot(app, "10-browse")
         app.buttons["poster-popular-2"].firstMatch.tap(); w(app.staticTexts["Synopsis for popular-2"]); shot(app, "11-film-detail-actions")
         app.swipeUp(); shot(app, "12-film-detail-credits")
         app.buttons["Cam Cast, actor"].tap(); w(app.navigationBars["Cam Cast"]); shot(app, "13-person")
@@ -38,7 +38,7 @@ final class ShotTests: XCTestCase {
         app.buttons["count-followers"].tap(); _ = app.staticTexts["fan 0"].waitForExistence(timeout: 8)
         for _ in 0..<10 { app.swipeUp() }; shot(app, "followers")
         app.navigationBars.buttons.firstMatch.tap()
-        app.tabBars.buttons["Browse"].tap(); _ = app.buttons["poster-popular-2"].firstMatch.waitForExistence(timeout: 8)
+        app.buttons["tab-Browse"].tap(); _ = app.buttons["poster-popular-2"].firstMatch.waitForExistence(timeout: 8)
         for _ in 0..<6 { app.swipeUp() }; shot(app, "browse")
         app.swipeDown(); app.swipeDown(); app.swipeDown(); app.swipeDown(); app.swipeDown(); app.swipeDown()
         app.buttons["poster-popular-2"].firstMatch.tap(); _ = app.staticTexts["Synopsis for popular-2"].waitForExistence(timeout: 8)
@@ -46,4 +46,14 @@ final class ShotTests: XCTestCase {
     }
     func testLight() { run(.light, "light") }
     func testDark() { run(.dark, "dark") }
+    func testFilmDetailScroll() {
+        for (mode, tag) in [(XCUIDevice.Appearance.light, "light"), (.dark, "dark")] {
+            XCUIDevice.shared.appearance = mode
+            func shot(_ app: XCUIApplication, _ n: String) { sleep(1); let a = XCTAttachment(screenshot: app.screenshot()); a.name = "fd-\(tag)-\(n)"; a.lifetime = .keepAlways; add(a) }
+            let app = XCUIApplication(); app.launchArguments = ["-Scenario", "ready"]; app.launch()
+            app.buttons["poster-logged-1"].firstMatch.tap(); _ = app.staticTexts["Synopsis for logged-1"].waitForExistence(timeout: 8)
+            shot(app, "1-top"); app.swipeUp(); shot(app, "2-scrolled"); for _ in 0..<6 { app.swipeUp() }; shot(app, "3-bottom")
+            app.terminate()
+        }
+    }
 }

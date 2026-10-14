@@ -11,14 +11,14 @@ final class ControlTests: XCTestCase {
         return app
     }
     func wait(_ e: XCUIElement, _ t: TimeInterval = 8, _ m: String = "", file: StaticString = #filePath, line: UInt = #line) { XCTAssertTrue(e.waitForExistence(timeout: t), m.isEmpty ? "missing (e)" : m, file: file, line: line) }
-    func tab(_ app: XCUIApplication, _ n: String) { let b = app.tabBars.buttons[n]; wait(b); b.tap() }
+    func tab(_ app: XCUIApplication, _ n: String) { let b = app.buttons["tab-" + n]; wait(b); b.tap() }
     func poster(_ app: XCUIApplication, _ slug: String) -> XCUIElement { app.buttons["poster-" + slug].firstMatch }
 
     // Sign gate
     func testSignedOutGateShowsSignInAndNoContent() {
         let app = launch("signedOut")
         wait(app.buttons["Sign in on letterboxd.com"])
-        XCTAssertFalse(app.tabBars.firstMatch.exists, "no tabs while signed out")
+        XCTAssertFalse(app.otherElements["bottom-nav"].exists, "no tabs while signed out")
     }
     func testSignInSheetCancelDismisses() {
         let app = launch("signedOut")
@@ -33,19 +33,19 @@ final class ControlTests: XCTestCase {
         done.tap()
         wait(app.staticTexts.containing(NSPredicate(format: "label CONTAINS 'did not confirm a signed-in account'")).firstMatch, 8, "validation failure text")
         XCTAssertTrue(app.navigationBars["Sign in"].exists, "sheet stays open")
-        XCTAssertFalse(app.tabBars.firstMatch.exists)
+        XCTAssertFalse(app.otherElements["bottom-nav"].exists)
     }
     func testStoredSessionRejectedByServerRequiresSignIn() {
         let app = launch("guest")
-        wait(app.buttons["Sign in on letterboxd.com"]); XCTAssertFalse(app.tabBars.firstMatch.exists)
+        wait(app.buttons["Sign in on letterboxd.com"]); XCTAssertFalse(app.otherElements["bottom-nav"].exists)
     }
     func testOfflineRestoreRetryThenReady() {
         let app = launch("offline")
         let retry = app.buttons["Try again"]; wait(retry)
         XCTAssertTrue(app.staticTexts["Couldn't confirm your sign-in"].exists)
-        XCTAssertFalse(app.tabBars.firstMatch.exists, "no content while unvalidated")
+        XCTAssertFalse(app.otherElements["bottom-nav"].exists, "no content while unvalidated")
         retry.tap()
-        wait(app.tabBars.firstMatch); wait(app.navigationBars["tester"])
+        wait(app.otherElements["bottom-nav"]); wait(app.navigationBars["tester"])
     }
     func testOfflineGateSignInButtonOpensSheet() {
         let app = launch("offline")
@@ -58,13 +58,13 @@ final class ControlTests: XCTestCase {
         let acct = app.buttons["Account"]; wait(acct); acct.tap()
         wait(app.buttons["Signed in as tester"])
         app.buttons["Sign out"].tap()
-        wait(app.buttons["Sign in on letterboxd.com"]); XCTAssertFalse(app.tabBars.firstMatch.exists)
+        wait(app.buttons["Sign in on letterboxd.com"]); XCTAssertFalse(app.otherElements["bottom-nav"].exists)
     }
     func testAccountMenuDismissKeepsSession() {
         let app = launch()
         app.buttons["Account"].tap(); wait(app.buttons["Signed in as tester"])
         app.coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: 0.6)).tap()
-        XCTAssertTrue(app.tabBars.firstMatch.exists); XCTAssertTrue(app.navigationBars["tester"].exists)
+        XCTAssertTrue(app.otherElements["bottom-nav"].exists); XCTAssertTrue(app.navigationBars["tester"].exists)
     }
 
     // Tabs
@@ -238,8 +238,8 @@ final class ControlTests: XCTestCase {
         XCTAssertFalse(app.buttons["Change member"].exists)
         app.buttons["count-following"].tap(); wait(app.navigationBars["Following"])
         wait(app.staticTexts["fan-1 friend 0"], 8, "list is for the viewed member")
-        app.tabBars.buttons["Browse"].tap(); app.tabBars.buttons["Profile"].tap()
-        app.tabBars.buttons["Profile"].tap()   // re-selecting the tab pops its stack to the root
+        app.buttons["tab-Browse"].tap(); app.buttons["tab-Profile"].tap()
+        app.buttons["tab-Profile"].tap()   // re-selecting the tab pops its stack to the root
         wait(app.navigationBars["tester"])
         app.buttons["Account"].tap(); wait(app.buttons["Signed in as tester"])
     }
@@ -251,7 +251,7 @@ final class ControlTests: XCTestCase {
     }
 
     func testCastChipOpensPersonThenFilmAndBackKeepsAccount() {
-        let app = launch(); app.tabBars.buttons["Browse"].tap()
+        let app = launch(); app.buttons["tab-Browse"].tap()
         poster(app, "popular-2").tap()
         wait(app.staticTexts["Synopsis for popular-2"])
         wait(app.buttons["Wes Writer, writer"], 8, "crew chip with role")
@@ -264,10 +264,10 @@ final class ControlTests: XCTestCase {
         app.navigationBars.buttons.firstMatch.tap()
         wait(app.navigationBars["Cam Cast"])
         app.navigationBars.buttons.firstMatch.tap()
-        app.tabBars.buttons["Profile"].tap(); wait(app.staticTexts["Tester Person"], 8, "account unchanged")
+        app.buttons["tab-Profile"].tap(); wait(app.staticTexts["Tester Person"], 8, "account unchanged")
     }
     func testNoCreditsFallsBackToPlainText() {
-        let app = launch("empty"); app.tabBars.buttons["Search"].tap()
+        let app = launch("empty"); app.buttons["tab-Search"].tap()
         let f = app.searchFields.firstMatch; wait(f); f.tap(); f.typeText("fight\n")
         wait(poster(app, "found-film")); poster(app, "found-film").tap()
         wait(app.staticTexts["Synopsis for found-film"])

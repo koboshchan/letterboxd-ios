@@ -116,7 +116,7 @@ struct EntryRow: View {
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             Theme.card.frame(width: 52, height: 78)
-                .overlay { AsyncImage(url: entry.posterURL) { $0.resizable().scaledToFill() } placeholder: { Color.clear } }
+                .overlay { CachedImage(url: entry.posterURL) { Color.clear } }
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous)).overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Theme.hairline)).shadow(color: .black.opacity(0.18), radius: 6, y: 3)
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {

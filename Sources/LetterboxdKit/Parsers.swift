@@ -141,8 +141,13 @@ public enum Parsers {
         let avatar = try doc.select("meta[property=og:image]").first()?.attr("content")
         var stats: [String: Int] = [:]
         for el in try doc.select(".profile-statistic, .profile-stats a, h4.profile-statistic") {
-            let t = try el.text()
-            for key in ["Films", "Following", "Followers"] where t.contains(key) { if let v = int(t.replacingOccurrences(of: key, with: "")) { stats[key] = v } }
+            // Real markup: <span class="value">1</span><span class="definition">Follower</span>; the label is singular when the count is 1.
+            let label = try el.select(".definition").first()?.text() ?? el.text()
+            let raw = try el.select(".value").first()?.text() ?? ""
+            let key: String? = label.range(of: "Follower", options: .caseInsensitive) != nil ? "Followers"
+                : label.range(of: "Following", options: .caseInsensitive) != nil ? "Following"
+                : label.range(of: "Film", options: .caseInsensitive) != nil ? "Films" : nil
+            if let key, let v = int(raw.isEmpty ? label.filter { !$0.isLetter && !$0.isWhitespace } : raw) { stats[key] = v }
         }
         let bio = try doc.select(".profile-bio, .bio .collapsed-text, meta[name=description]").first()
         let bioText = try bio.map { $0.tagName() == "meta" ? try $0.attr("content") : try $0.text() }

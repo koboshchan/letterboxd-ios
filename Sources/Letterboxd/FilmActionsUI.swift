@@ -104,3 +104,26 @@ struct UnverifiedWriteRows: View {
         }
     }
 }
+
+/// Long-press menu shared by every poster (profile, browse, lists, person grids): Open film, Add/Remove Watchlist, Like/Unlike.
+/// Only the two verified writes are offered; rating and watched are not shown until their requests are captured.
+/// Labels are explicit (Add/Like) until the server state is known; state is the same shared model the film screen uses.
+struct FilmContextMenu: ViewModifier {
+    @Environment(AppEnvironment.self) private var env
+    let film: FilmSummary
+    func body(content: Content) -> some View {
+        if env.actions == nil { content } else {
+            let m = env.actionModel(slug: film.slug)
+            content.contextMenu {
+                NavigationLink(value: film) { Label("Open Film", systemImage: "film") }
+                Button { Task { await m.toggleWatchlist() } } label: {
+                    Label(m.watchlist == .on ? "Remove from Watchlist" : "Add to Watchlist", systemImage: m.watchlist == .on ? "checkmark.circle.fill" : "plus.circle")
+                }.disabled(m.busy || m.signedOut).accessibilityIdentifier("menu-watchlist")
+                Button { Task { await m.toggleLike() } } label: {
+                    Label(m.liked == .on ? "Unlike" : "Like", systemImage: m.liked == .on ? "heart.fill" : "heart")
+                }.disabled(m.busy || m.signedOut).accessibilityIdentifier("menu-like")
+            }
+        }
+    }
+}
+extension View { func filmContextMenu(_ f: FilmSummary) -> some View { modifier(FilmContextMenu(film: f)) } }

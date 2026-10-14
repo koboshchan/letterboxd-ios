@@ -32,9 +32,7 @@ struct PosterView: View {
             .aspectRatio(2.0/3.0, contentMode: .fit)
             .overlay {
                 if let u = film.posterURL ?? resolved {
-                    AsyncImage(url: u) { phase in
-                        if let img = phase.image { img.resizable().scaledToFill() } else { titleCard }
-                    }
+                    CachedImage(url: u) { titleCard }
                 } else {
                     titleCard
                 }
@@ -57,12 +55,18 @@ struct PosterGrid: View {
     let emptyTitle: String
     let emptyBody: String
     private let cols = [GridItem(.adaptive(minimum: 104), spacing: 10)]
+    /// Warm only a small window after the item that just appeared; obsolete prefetches are cancelled by the pipeline.
+    private func prefetchAround(_ f: FilmSummary) {
+        guard let i = loader.items.firstIndex(where: { $0.id == f.id }) else { return }
+        let window = loader.items[min(i + 1, loader.items.count)..<min(i + 13, loader.items.count)]
+        ImagePipeline.shared.prefetch(window.compactMap(\.posterURL))
+    }
     var body: some View {
         ScrollView {
             LazyVGrid(columns: cols, spacing: 12) {
                 ForEach(loader.items) { f in
-                    NavigationLink(value: f) { PosterView(film: f) }.buttonStyle(.plain)
-                        .task { await loader.loadMore(current: f) }
+                    NavigationLink(value: f) { PosterView(film: f) }.buttonStyle(.plain).filmContextMenu(f)
+                        .task { await loader.loadMore(current: f); prefetchAround(f) }
                 }
             }.padding(.horizontal, 16)
             if loader.isLoading { ProgressView().padding(24) }
@@ -116,7 +120,7 @@ struct StarsView: View {
 struct AvatarView: View {
     let url: URL?; var size: CGFloat = 44
     var body: some View {
-        AsyncImage(url: url) { $0.resizable().scaledToFill() } placeholder: { Image(systemName: "person.fill").foregroundStyle(.secondary).frame(maxWidth: .infinity, maxHeight: .infinity).background(Theme.card) }
+        CachedImage(url: url) { Image(systemName: "person.fill").foregroundStyle(.secondary).frame(maxWidth: .infinity, maxHeight: .infinity).background(Theme.card) }
             .frame(width: size, height: size).clipShape(Circle())
     }
 }

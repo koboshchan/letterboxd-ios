@@ -19,6 +19,25 @@ final class FilmActionTests: XCTestCase {
         XCTAssertEqual(XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: p, object: e)], timeout: 8), .completed, "expected \(l), got \(e.label)", line: line)
     }
 
+    /// Long-press menu on a grid poster: only verified actions exist, state is shared with the film screen.
+    func testPosterLongPressMenuActionsSyncWithFilmScreen() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-Scenario", "ready", "-WriteMode", "ok"]
+        continueAfterFailure = false
+        app.launch()
+        let poster = app.buttons["poster-logged-1"].firstMatch
+        poster.press(forDuration: 1.0)
+        XCTAssertTrue(app.buttons["menu-watchlist"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Open Film"].exists)
+        XCTAssertFalse(app.buttons["Rate"].exists); XCTAssertFalse(app.buttons["Mark as Watched"].exists)
+        XCTAssertEqual(app.buttons["menu-watchlist"].label, "Add to Watchlist")
+        app.buttons["menu-like"].tap()
+        poster.tap()
+        XCTAssertTrue(app.staticTexts["Synopsis for logged-1"].waitForExistence(timeout: 8))
+        waitLabel(like(app), "Unlike")
+        waitLabel(wl(app), "Add to Watchlist")
+    }
+
     func testBothDirectionsServerConfirmed() {
         let app = open("ok")
         waitLabel(wl(app), "Add to Watchlist"); waitLabel(like(app), "Like")
