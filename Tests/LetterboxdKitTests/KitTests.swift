@@ -323,7 +323,7 @@ final class AuthTransportTests: XCTestCase {
             XCTAssertFalse(RedirectPolicy.allows(to: URL(string: s)!, authenticated: false), s)
         }
     }
-    /// Real URLSession with a local URLProtocol that answers with a redirect; checks cookie never reaches the target.
+    /// Invokes the redirect-guard delegate directly (decision logic only). NOT a real URLSession/TLS redirect delivery test.
     func testRedirectGuardDelegateDirect() async {
         let task = URLSession.shared.dataTask(with: URL(string: "https://letterboxd.com/start/")!)
         for code in [301, 302, 303, 307, 308] {
@@ -363,13 +363,18 @@ final class AuthTransportTests: XCTestCase {
 actor SeenBox { var all: [String] = []; func add(_ s: String) { all.append(s) } }
 
 final class RedirectStub: URLProtocol, @unchecked Sendable {
-    nonisolated(unsafe) static var seen: [URLRequest] = []
-    nonisolated(unsafe) static var code = 302
-    nonisolated(unsafe) static var target = "https://evil.com/steal"
+    private static let lk = NSLock()
+    private nonisolated(unsafe) static var _seen: [URLRequest] = []
+    private nonisolated(unsafe) static var _code = 302
+    private nonisolated(unsafe) static var _target = "https://evil.com/steal"
+    static var seen: [URLRequest] { get { lk.lock(); defer { lk.unlock() }; return _seen } set { lk.lock(); _seen = newValue; lk.unlock() } }
+    static var code: Int { get { lk.lock(); defer { lk.unlock() }; return _code } set { lk.lock(); _code = newValue; lk.unlock() } }
+    static var target: String { get { lk.lock(); defer { lk.unlock() }; return _target } set { lk.lock(); _target = newValue; lk.unlock() } }
+    static func record(_ r: URLRequest) { lk.lock(); _seen.append(r); lk.unlock() }
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
     override func startLoading() {
-        Self.seen.append(request)
+        Self.record(request)
         if request.url!.host == "letterboxd.com", request.url!.path == "/start/" {
             let resp = HTTPURLResponse(url: request.url!, statusCode: Self.code, httpVersion: nil, headerFields: ["Location": Self.target])!
             var n = URLRequest(url: URL(string: Self.target)!); n.httpMethod = "GET"
@@ -411,23 +416,44 @@ final class AccountRaceTests: XCTestCase {
     }
     func testLogoutDuringSaveWaitsThenClears() async throws {
         let st = BlockingStore(); let svc = LiveAccountService(store: st)
-        let tok = svc.beginOperation()
-        let t = Task.detached { try await svc.complete(cookies: [AccountRaceTests.cookie], fetch: { _ in (200, AccountRaceTests.page) }, token: tok) }
-        var spins = 0
-        while !st.saving { spins += 1; if spins > 1500 { XCTFail("save never entered: \(String(describing: try? await t.value))"); return }; try await Task.sleep(nanoseconds: 2_000_000) }   // suspended INSIDE save
+        let t = Task.detached { try await svc.complete(cookies: [AccountRaceTests.cookie], fetch: { _ in (200, AccountRaceTests.page) }) }
+        try await st.waitSaving()
         let out = Task.detached { try await svc.signOut() }
-        try await Task.sleep(nanoseconds: 100_000_000)
+        try await svc.waitForBlocked(1)                      // logout is provably queued on the fence
         XCTAssertFalse(st.cleared, "logout must wait for the in-progress save")
         st.release.signal()
         _ = try? await t.value; try await out.value
         XCTAssertTrue(st.cleared); XCTAssertNil(try st.load(), "store empty after logout")
     }
-    func testRestoreAfterLogoutDoesNotReinstallOrClear() async throws {
+    /// Default (tokenless) public calls are fenced too: a logout during the fetch means nothing persists.
+    func testDefaultCompleteFetchLogoutNeverPersists() async throws {
+        let st = InMemorySessionStore(); let svc = LiveAccountService(store: st); let gate = Gate()
+        let t = Task { try await svc.complete(cookies: [AccountRaceTests.cookie], fetch: { _ in await gate.wait(); return (200, AccountRaceTests.page) }) }
+        try await Task.sleep(nanoseconds: 50_000_000)
+        try svc.signOutNow(); await gate.release()
+        do { _ = try await t.value; XCTFail("must refuse") } catch {}
+        XCTAssertNil(try st.load())
+    }
+    /// A stale restore that sees an invalid identity must not clear a newer login made after logout.
+    func testStaleFailedRestoreCannotClearNewLogin() async throws {
         let st = InMemorySessionStore(); try st.save(Session(username: "uu", cookies: [AccountRaceTests.cookie], storedAt: Date()))
-        let svc = LiveAccountService(store: st); let gate = Gate(); let tok = svc.beginOperation()
-        let t = Task { try await svc.restore(fetch: { _ in await gate.wait(); return (200, AccountRaceTests.page) }, token: tok) }
-        svc.invalidatePending(); await gate.release()
-        let r = try await t.value; XCTAssertNil(r)
+        let svc = LiveAccountService(store: st); let gate = Gate()
+        let r = Task { try await svc.restore(fetch: { _ in await gate.wait(); return (200, "<script>person = { username: \"\", loggedIn: false }</script>") }) }
+        try await Task.sleep(nanoseconds: 50_000_000)
+        try svc.signOutNow()
+        _ = try await svc.complete(cookies: [AccountRaceTests.cookie], fetch: { _ in (200, AccountRaceTests.page) })   // newer login
+        await gate.release()
+        let out = try await r.value; XCTAssertNil(out)
+        XCTAssertEqual(try st.load()?.username, "uu", "newer login must survive the stale restore failure")
+    }
+    /// Logout is one atomic invalidate+clear: a begin/save cannot slip between them and then be erased.
+    func testLogoutIsAtomicAgainstNewLogin() async throws {
+        let st = InMemorySessionStore(); let svc = LiveAccountService(store: st)
+        try svc.signOutNow()
+        _ = try await svc.complete(cookies: [AccountRaceTests.cookie], fetch: { _ in (200, AccountRaceTests.page) })
+        XCTAssertEqual(try st.load()?.username, "uu")        // login after logout persists
+        let tok = svc.beginOperation(); try svc.signOutNow()  // token begun before logout is obsolete afterwards
+        XCTAssertFalse(svc.isCurrent(tok)); XCTAssertNil(try st.load())
     }
     func testGenerationChangeDuringCacheGetNeverReturnsStale() async throws {
         let auth = AuthAuthority(); let u = URL(string: "https://letterboxd.com/p/")!; let cache = ResponseCache()
@@ -443,7 +469,11 @@ final class AccountRaceTests: XCTestCase {
         do { _ = try await f.text(u); XCTFail("stale network result returned") } catch LetterboxdError.cancelled {}
     }
 }
+extension LiveAccountService {
+    func waitForBlocked(_ n: Int) async throws { for _ in 0..<2500 { if fence.waiting >= n { return }; try await Task.sleep(nanoseconds: 2_000_000) }; XCTFail("logout never reached the fence") }
+}
 final class BlockingStore: SessionStore, @unchecked Sendable {
+    func waitSaving() async throws { for _ in 0..<2500 { if saving { return }; try await Task.sleep(nanoseconds: 2_000_000) }; XCTFail("save never entered") }
     var saving: Bool { lock.lock(); defer { lock.unlock() }; return _saving }
     private var _saving = false
     let release = DispatchSemaphore(value: 0)

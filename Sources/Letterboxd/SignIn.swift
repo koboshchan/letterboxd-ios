@@ -44,10 +44,10 @@ final class AccountModel {
     }
     /// Removes the Keychain session and any web data left for the site.
     func signOut() async {
-        service.invalidatePending()   // invalidates every pending restore/complete (before any await)
-        auth?.revoke()   // first: stops credentials immediately and invalidates in-flight responses
+        auth?.revoke()   // stops credentials immediately and invalidates in-flight responses
         username = nil; epoch += 1
-        do { try await service.signOut() } catch { failure = "Could not remove the stored session." }
+        // ONE synchronous commit boundary before any await: obsoletes pending operations and clears the store atomically.
+        do { try service.signOutNow() } catch { failure = "Could not remove the stored session." }
         let ds = webStore
         let recs = await ds.dataRecords(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes())
         await ds.removeData(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(), for: recs.filter { $0.displayName == "letterboxd.com" })

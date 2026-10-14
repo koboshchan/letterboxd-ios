@@ -81,6 +81,7 @@ public final class LiveAccountService: AccountService, @unchecked Sendable {
     public func signIn(email: String, password: String) async throws -> Session { throw AuthError.verificationRequired }
 
     public func complete(cookies: [WebCookie], fetch: HomepageFetcher, now: Date = Date(), token: Int? = nil) async throws -> Session {
+        let token = token ?? fence.begin()   // never tokenless: obsolete if logout/another operation starts during the await
         guard let jar = SessionCookies.accept(cookies, now: now, storedAt: now) else { throw AuthError.notSignedIn }
         let r = try await fetch(Session(username: "", cookies: jar, storedAt: now))
         guard r.status == 200, let name = IdentityCheck.username(fromHomepage: r.html) else { throw AuthError.notSignedIn }
@@ -92,6 +93,7 @@ public final class LiveAccountService: AccountService, @unchecked Sendable {
     /// Launch-time restore: re-validates stored cookie attributes and re-confirms identity with the server.
     /// Invalid, expired or mismatched sessions are removed. A network failure keeps the stored session untouched.
     public func restore(fetch: HomepageFetcher, now: Date = Date(), token: Int? = nil) async throws -> Session? {
+        let token = token ?? fence.begin()
         guard let s = try? store.load() else { _ = try commit(token, { try store.clear() }); return nil }
         guard let jar = SessionCookies.accept(s.cookies, now: now, storedAt: s.storedAt) else { _ = try commit(token, { try store.clear() }); return nil }
         let r = try await fetch(Session(username: s.username, cookies: jar, storedAt: s.storedAt))
@@ -106,9 +108,10 @@ public final class LiveAccountService: AccountService, @unchecked Sendable {
     /// Synchronously obsoletes every pending operation (call before any await on logout).
     public func invalidatePending() { fence.invalidate() }
     public func isCurrent(_ t: Int) -> Bool { fence.isCurrent(t) }
-    public func signOut() async throws { fence.invalidate(); try fence.performAlways { try store.clear() } }
-    private func commit(_ t: Int?, _ body: () throws -> Void) throws -> Bool {
-        guard let t else { try body(); return true }
+    /// Synchronous single commit boundary: invalidate + clear atomically, callable before any await.
+    public func signOutNow() throws { try fence.invalidateAndPerform { try store.clear() } }
+    public func signOut() async throws { try signOutNow() }
+    private func commit(_ t: Int, _ body: () throws -> Void) throws -> Bool {
         return try fence.perform(t, body) != nil
     }
     public func setWatchlist(slug: String, on: Bool) async throws { throw AuthError.unsupported("Watchlist writes are not verified.") }
@@ -125,5 +128,12 @@ public final class AuthFence: @unchecked Sendable {
     public func invalidate() { lock.lock(); epoch += 1; lock.unlock() }
     public func isCurrent(_ t: Int?) -> Bool { lock.lock(); defer { lock.unlock() }; return t == nil || t == epoch }
     public func perform(_ t: Int, _ body: () throws -> Void) rethrows -> Void? { lock.lock(); defer { lock.unlock() }; guard t == epoch else { return nil }; try body(); return () }
+    /// Logout: obsoletes every pending token AND clears under ONE lock acquisition, so no operation can begin+save in between.
+    public func invalidateAndPerform(_ body: () throws -> Void) rethrows { enter(); lock.lock(); defer { lock.unlock() }; leave(); epoch += 1; try body() }
+    private let cl = NSLock(); private var _waiting = 0
+    private func enter() { cl.lock(); _waiting += 1; cl.unlock() }
+    private func leave() { cl.lock(); _waiting -= 1; cl.unlock() }
+    /// Test seam: number of callers currently blocked acquiring the fence.
+    public var waiting: Int { cl.lock(); defer { cl.unlock() }; return _waiting }
     public func performAlways(_ body: () throws -> Void) rethrows { lock.lock(); defer { lock.unlock() }; try body() }
 }
