@@ -252,4 +252,28 @@ final class ControlTests: XCTestCase {
         app.navigationBars.buttons.firstMatch.tap(); app.buttons["count-followers"].tap()
         wait(app.staticTexts["No followers yet"])
     }
+
+    func testCastChipOpensPersonThenFilmAndBackKeepsAccount() {
+        let app = launch(); app.tabBars.buttons["Browse"].tap()
+        poster(app, "Popular 2").tap()
+        wait(app.staticTexts["Synopsis for popular-2"])
+        wait(app.buttons["Wes Writer, writer"], 8, "crew chip with role")
+        app.buttons["Cam Cast, actor"].tap()
+        wait(app.navigationBars["Cam Cast"], 8, "person name header")
+        // No portrait available in the mock: no image, no fake placeholder face.
+        XCTAssertFalse(app.images["Cam Cast"].exists)
+        wait(poster(app, "Found Film")); poster(app, "Found Film").tap()
+        wait(app.staticTexts["Synopsis for found-film"])
+        app.navigationBars.buttons.firstMatch.tap()
+        wait(app.navigationBars["Cam Cast"])
+        app.navigationBars.buttons.firstMatch.tap()
+        app.tabBars.buttons["Profile"].tap(); wait(app.staticTexts["Tester Person"], 8, "account unchanged")
+    }
+    func testNoCreditsFallsBackToPlainText() {
+        let app = launch("empty"); app.tabBars.buttons["Search"].tap()
+        let f = app.searchFields.firstMatch; wait(f); f.tap(); f.typeText("fight\n")
+        wait(poster(app, "Found Film")); poster(app, "Found Film").tap()
+        wait(app.staticTexts["Synopsis for found-film"])
+        XCTAssertFalse(app.buttons["Cam Cast, actor"].exists, "no dead chips")
+    }
 }

@@ -43,7 +43,7 @@ final class MockService: LetterboxdService, @unchecked Sendable {
     }
     func film(slug: String, refresh: Bool) async throws -> FilmDetail {
         try maybeFail()
-        return FilmDetail(slug: slug, title: slug, year: 2001, tagline: "A tagline", synopsis: "Synopsis for \(slug)", posterURL: nil, runtimeMinutes: 99, directors: [Person(name: "Dana Director", url: nil)], cast: [Person(name: "Cam Cast", url: nil)], genres: [], averageRating: 3.5, ratingCount: 10)
+        return FilmDetail(slug: slug, title: slug, year: 2001, tagline: "A tagline", synopsis: "Synopsis for \(slug)", posterURL: nil, runtimeMinutes: 99, directors: [Person(name: "Dana Director", url: nil)], cast: [Person(name: "Cam Cast", url: nil)], genres: [], averageRating: 3.5, ratingCount: 10, credits: sc.empty ? [] : [Credit(name: "Dana Director", role: .director, slug: "dana-director"), Credit(name: "Cam Cast", role: .actor, slug: "cam-cast"), Credit(name: "Wes Writer", role: .writer, slug: "wes-writer")])
     }
     func searchFilms(query: String, page: Int) async throws -> Page<FilmSummary> {
         if query.lowercased().contains("nothing") { return Page(items: [], page: 1, hasNext: false) }
