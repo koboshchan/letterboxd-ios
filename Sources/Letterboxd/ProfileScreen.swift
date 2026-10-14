@@ -4,8 +4,18 @@ import LetterboxdKit
 enum ProfileTab: String, CaseIterable, Identifiable { case films = "Films", diary = "Diary", reviews = "Reviews", watchlist = "Watchlist", lists = "Lists"
     var id: String { rawValue } }
 
+/// Navigation values for member screens. They carry only a username that came from a parsed Letterboxd member row.
+struct MemberRoute: Hashable { let username: String }
+struct NetworkRoute: Hashable { let username: String; let kind: NetworkKind }
+enum NetworkKind: String, Hashable { case following = "Following", followers = "Followers" }
+
+/// The signed-in root profile shows env.username (server-validated). A member profile is read-only and shows
+/// whoever was tapped in a Following/Followers list; it never changes env.username.
 struct ProfileScreen: View {
     @Environment(AppEnvironment.self) private var env
+    var memberUsername: String? = nil
+    private var isMember: Bool { memberUsername != nil }
+    private var shownUser: String { memberUsername ?? env.username }
     @State private var tab: ProfileTab = ProfileTab.allCases[Int(AppEnvironment.arg("-UISegment") ?? "0") ?? 0]
     @State private var profile: ValueLoader<Profile>?
     @State private var films: PagedLoader<FilmSummary>?
@@ -15,7 +25,7 @@ struct ProfileScreen: View {
     @State private var lists: PagedLoader<ListSummary>?
 
     var body: some View {
-        let u = env.username
+        let u = shownUser
         VStack(spacing: 0) {
             header
             Picker("Section", selection: $tab) { ForEach(ProfileTab.allCases) { Text($0.rawValue).tag($0) } }
@@ -24,13 +34,13 @@ struct ProfileScreen: View {
         }
         .navigationTitle(u).navigationBarTitleDisplayMode(.inline)
         .onAppear { if profile == nil { reset() } }
-        .onChange(of: env.username) { _, _ in reset() }
+        .onChange(of: env.username) { _, _ in if !isMember { reset() } }
         .navigationDestination(for: ActivityEntry.self) { EntryScreen(entry: $0) }
         .id(u)
     }
 
     private func reset() {
-        let svc = env.service, u = env.username
+        let svc = env.service, u = shownUser
         profile = ValueLoader { r in try await svc.profile(username: u, refresh: r) }
         films = PagedLoader { p, r in try await svc.films(username: u, page: p, refresh: r) }
         watch = PagedLoader { p, r in try await svc.watchlist(username: u, page: p, refresh: r) }
@@ -44,10 +54,14 @@ struct ProfileScreen: View {
             HStack(spacing: 14) {
                 AvatarView(url: p.value?.avatarURL, size: 64)
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(p.value?.displayName ?? env.username).font(Theme.serif(26, weight: .bold))
+                    Text(p.value?.displayName ?? shownUser).font(Theme.serif(26, weight: .bold))
                     if let v = p.value {
                         HStack(spacing: 14) {
-                            stat(v.filmCount, "Films"); stat(v.followingCount, "Following"); stat(v.followersCount, "Followers")
+                            stat(v.filmCount, "Films")
+                            NavigationLink(value: NetworkRoute(username: shownUser, kind: .following)) { stat(v.followingCount, "Following") }.buttonStyle(.plain)
+                                .accessibilityIdentifier("count-following")
+                            NavigationLink(value: NetworkRoute(username: shownUser, kind: .followers)) { stat(v.followersCount, "Followers") }.buttonStyle(.plain)
+                                .accessibilityIdentifier("count-followers")
                         }
                     } else if let e = p.error { Text(e.localizedDescription).font(.caption).foregroundStyle(Theme.orange).lineLimit(2) }
                     else { Text("Loading").font(.caption).foregroundStyle(.secondary) }
@@ -67,8 +81,8 @@ struct ProfileScreen: View {
 
     @ViewBuilder private var content: some View {
         switch tab {
-        case .films: if let l = films { PosterGrid(loader: l, emptyTitle: "No films yet", emptyBody: "\(env.username) hasn't logged any films.") }
-        case .watchlist: if let l = watch { PosterGrid(loader: l, emptyTitle: "Watchlist is empty", emptyBody: "Nothing on \(env.username)'s watchlist yet.") }
+        case .films: if let l = films { PosterGrid(loader: l, emptyTitle: "No films yet", emptyBody: "\(shownUser) hasn't logged any films.") }
+        case .watchlist: if let l = watch { PosterGrid(loader: l, emptyTitle: "Watchlist is empty", emptyBody: "Nothing on \(shownUser)'s watchlist yet.") }
         case .diary: if let l = diary { EntryList(loader: l, emptyTitle: "Diary is empty", emptyBody: "No diary entries in the public feed. Letterboxd's RSS shows only recent entries.") }
         case .reviews: if let l = reviews { EntryList(loader: l, emptyTitle: "No reviews", emptyBody: "No written reviews in the public feed yet.") }
         case .lists: if let l = lists { ListsView(loader: l) }
@@ -153,5 +167,47 @@ struct ListsView: View {
         .listStyle(.plain)
         .refreshable { await loader.loadFirst(refresh: true) }
         .task { await loader.loadFirst() }
+    }
+}
+
+
+/// Following / Followers of a member: avatar + name rows, paging, pull to refresh, loading/empty/error states.
+struct MemberListScreen: View {
+    @Environment(AppEnvironment.self) private var env
+    let route: NetworkRoute
+    @State private var loader: PagedLoader<MemberSummary>?
+    var body: some View {
+        Group {
+            if let l = loader {
+                List {
+                    ForEach(l.items) { m in
+                        NavigationLink(value: MemberRoute(username: m.username)) {
+                            HStack(spacing: 12) {
+                                AvatarView(url: m.avatarURL, size: 44)
+                                Text(m.displayName).font(Theme.serif(17))
+                                Spacer(minLength: 0)
+                            }
+                        }
+                        .accessibilityIdentifier("member-\(m.username)")
+                        .task { await l.loadMore(current: m) }
+                    }
+                    if l.isEmptyLoaded {
+                        EmptyCard(symbol: "person.2", title: route.kind == .following ? "Not following anyone" : "No followers yet",
+                                  text: route.kind == .following ? "\(route.username) isn't following any members." : "Nobody follows \(route.username) yet.").listRowBackground(Color.clear)
+                    }
+                    if let e = l.error { ErrorCard(error: e, retry: { Task { await l.loadFirst(refresh: true) } }, link: URL(string: "https://letterboxd.com/\(route.username)/\(route.kind.rawValue.lowercased())/")).listRowBackground(Color.clear).listRowSeparator(.hidden) }
+                    if l.isLoading { HStack { Spacer(); ProgressView(); Spacer() }.listRowBackground(Color.clear) }
+                }
+                .listStyle(.plain)
+                .refreshable { await l.loadFirst(refresh: true) }
+                .task { await l.loadFirst() }
+            } else { ProgressView() }
+        }
+        .navigationTitle(route.kind.rawValue).navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            guard loader == nil else { return }
+            let svc = env.service, u = route.username, k = route.kind
+            loader = PagedLoader { p, r in k == .following ? try await svc.following(username: u, page: p, refresh: r) : try await svc.followers(username: u, page: p, refresh: r) }
+        }
     }
 }

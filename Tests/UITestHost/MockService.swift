@@ -13,7 +13,7 @@ final class MockService: LetterboxdService, @unchecked Sendable {
     }
     private func films(_ prefix: String, _ n: Int, offset: Int = 0) -> [FilmSummary] { (0..<n).map { FilmSummary(slug: "\(prefix.lowercased())-\($0 + offset)", title: "\(prefix) \($0 + offset)", year: 2000 + $0) } }
     func profile(username: String, refresh: Bool) async throws -> Profile {
-        Profile(username: username, displayName: "Tester Person", avatarURL: nil, bio: nil, filmCount: 3, followingCount: 2, followersCount: 1)
+        Profile(username: username, displayName: username == "tester" ? "Tester Person" : "Member \(username)", avatarURL: nil, bio: nil, filmCount: 3, followingCount: 2, followersCount: 1)
     }
     func films(username: String, page: Int, refresh: Bool) async throws -> Page<FilmSummary> {
         if sc.empty { return Page(items: [], page: 1, hasNext: false) }
@@ -51,5 +51,12 @@ final class MockService: LetterboxdService, @unchecked Sendable {
         return Page(items: [FilmSummary(slug: "found-film", title: "Found Film", year: 2010)], page: 1, hasNext: false)
     }
     func searchMembers(query: String, page: Int) async throws -> Page<MemberSummary> { Page(items: [], page: 1, hasNext: false) }
+    func following(username: String, page: Int, refresh: Bool) async throws -> Page<MemberSummary> { try network("friend", username, page) }
+    func followers(username: String, page: Int, refresh: Bool) async throws -> Page<MemberSummary> { try network("fan", username, page) }
+    private func network(_ p: String, _ u: String, _ page: Int) throws -> Page<MemberSummary> {
+        if sc.empty { return Page(items: [], page: 1, hasNext: false) }
+        if page == 2 { return Page(items: [MemberSummary(username: p + "-late", displayName: p + " late", avatarURL: nil)], page: 2, hasNext: false) }
+        return Page(items: (0..<14).map { MemberSummary(username: "\(p)-\($0)", displayName: "\(u == "tester" ? "" : u + " ")\(p) \($0)", avatarURL: nil) }, page: 1, hasNext: true)
+    }
     func poster(for slug: String) async -> URL? { nil }
 }

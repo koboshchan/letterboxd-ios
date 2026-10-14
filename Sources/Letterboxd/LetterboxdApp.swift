@@ -58,7 +58,11 @@ struct RootView: View {
     }
     private var tabs: some View {
         TabView(selection: $selection) {
-            Tab("Profile", systemImage: "person.crop.circle", value: 0) { NavigationStack { ProfileScreen().toolbar { AccountButton() } } }
+            Tab("Profile", systemImage: "person.crop.circle", value: 0) { NavigationStack {
+                ProfileScreen().toolbar { AccountButton() }
+                    .navigationDestination(for: NetworkRoute.self) { MemberListScreen(route: $0) }
+                    .navigationDestination(for: MemberRoute.self) { ProfileScreen(memberUsername: $0.username) }
+            } }
             Tab("Browse", systemImage: "film.stack", value: 1) { NavigationStack(path: $browsePath) { BrowseScreen() } }
             Tab("Search", systemImage: "magnifyingglass", value: 2, role: .search) { NavigationStack { SearchScreen() } }
         }

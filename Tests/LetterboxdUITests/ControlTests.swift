@@ -216,4 +216,40 @@ final class ControlTests: XCTestCase {
         let cancel = app.buttons["Cancel"]; wait(cancel); cancel.tap()
         XCTAssertTrue(app.staticTexts["Search Letterboxd"].exists)
     }
+
+    // Following / Followers
+    func testFollowingCountOpensListThenMemberProfileThenBack() {
+        let app = launch(); wait(app.navigationBars["tester"])
+        let c = app.buttons["count-following"]; wait(c); c.tap()
+        wait(app.navigationBars["Following"]); wait(app.staticTexts["friend 0"])
+        app.staticTexts["friend 3"].tap()
+        wait(app.navigationBars["friend-3"], 8, "member profile shows tapped member")
+        XCTAssertTrue(app.staticTexts["Member friend-3"].exists)
+        XCTAssertFalse(app.navigationBars["tester"].exists)
+        app.navigationBars.buttons.firstMatch.tap(); wait(app.navigationBars["Following"])
+        app.navigationBars.buttons.firstMatch.tap(); wait(app.navigationBars["tester"])
+        XCTAssertTrue(app.staticTexts["Tester Person"].exists, "root identity unchanged")
+    }
+    func testFollowersListOpensAndPaginates() {
+        let app = launch(); app.buttons["count-followers"].tap()
+        wait(app.navigationBars["Followers"]); wait(app.staticTexts["fan 0"])
+        let late = app.staticTexts["fan late"]; var n = 0
+        while !late.exists && n < 10 { app.swipeUp(); n += 1 }
+        XCTAssertTrue(late.exists, "page 2 loads")
+    }
+    func testMemberProfileKeepsRootIdentityAndNoSwitcher() {
+        let app = launch(); app.buttons["count-followers"].tap()
+        app.staticTexts["fan 1"].tap(); wait(app.navigationBars["fan-1"])
+        XCTAssertFalse(app.buttons["Change member"].exists)
+        app.buttons["count-following"].tap(); wait(app.navigationBars["Following"])
+        wait(app.staticTexts["fan-1 friend 0"], 8, "list is for the viewed member")
+        app.tabBars.buttons["Browse"].tap(); app.tabBars.buttons["Profile"].tap()
+        app.buttons["Account"].tap(); wait(app.staticTexts["Signed in as tester"])
+    }
+    func testNetworkEmptyState() {
+        let app = launch("empty"); app.buttons["count-following"].tap()
+        wait(app.staticTexts["Not following anyone"])
+        app.navigationBars.buttons.firstMatch.tap(); app.buttons["count-followers"].tap()
+        wait(app.staticTexts["No followers yet"])
+    }
 }

@@ -12,6 +12,8 @@ public protocol LetterboxdService: Sendable {
     func film(slug: String, refresh: Bool) async throws -> FilmDetail
     func searchFilms(query: String, page: Int) async throws -> Page<FilmSummary>
     func searchMembers(query: String, page: Int) async throws -> Page<MemberSummary>
+    func following(username: String, page: Int, refresh: Bool) async throws -> Page<MemberSummary>
+    func followers(username: String, page: Int, refresh: Bool) async throws -> Page<MemberSummary>
     func poster(for slug: String) async -> URL?
 }
 
@@ -76,6 +78,15 @@ public final class PublicWebService: LetterboxdService {
     public func searchMembers(query: String, page: Int) async throws -> Page<MemberSummary> {
         let q = try Self.cleanQuery(query)
         return try Parsers.members(html: try await fetcher.text(url(["s", "search", "members", q], page: page)), page: page)
+    }
+    /// Real pages observed: /{user}/following/ and /{user}/followers/ (table of .person-summary rows, a.next paging).
+    public func following(username: String, page: Int, refresh: Bool) async throws -> Page<MemberSummary> {
+        let u = try Validate.username(username)
+        return try Parsers.members(html: try await fetcher.text(url([u, "following"], page: page), forceRefresh: refresh), page: page)
+    }
+    public func followers(username: String, page: Int, refresh: Bool) async throws -> Page<MemberSummary> {
+        let u = try Validate.username(username)
+        return try Parsers.members(html: try await fetcher.text(url([u, "followers"], page: page), forceRefresh: refresh), page: page)
     }
     public func poster(for slug: String) async -> URL? {
         guard let s = try? Validate.slug(slug) else { return nil }
