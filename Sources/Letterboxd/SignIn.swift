@@ -7,8 +7,21 @@ import LetterboxdKit
 final class AccountModel {
     let service: LiveAccountService
     private let store: SessionStore
-    var username: String?
+    var username: String? { didSet { onUsernameChange?(username) } }
     var failure: String?
+    /// Why the last restore could not confirm a stored session (offline etc.); nil otherwise.
+    var restoreFailure: String?
+    /// Called synchronously whenever the validated username changes (including to nil on sign-out).
+    var onUsernameChange: ((String?) -> Void)?
+    private let fetch: HomepageFetcher
+    enum Gate: Equatable { case checking, restoreFailed(String), signInRequired, ready(String) }
+    /// The only thing the UI may use to decide what to show: app content needs a server-validated username.
+    var gate: Gate {
+        if let u = username { return .ready(u) }
+        if validating { return .checking }
+        if let r = restoreFailure { return .restoreFailed(r) }
+        return .signInRequired
+    }
     /// True until the first server validation of any stored session finishes; UI must not show a stored name as signed in.
     var validating = true
     /// Bumped on every auth state change; the root view is rebuilt on it so no model keeps previous-account data.
@@ -17,29 +30,30 @@ final class AccountModel {
     var auth: AuthAuthority?
     /// The web view's data store. Owned here so sign-out clears the store actually used.
     private(set) var webStore = WKWebsiteDataStore.nonPersistent()
-    init(store: SessionStore = KeychainSessionStore()) {
-        self.store = store; service = LiveAccountService(store: store)
+    init(store: SessionStore = KeychainSessionStore(), fetch: @escaping HomepageFetcher = AccountModel.fetchHomepage) {
+        self.store = store; self.fetch = fetch; service = LiveAccountService(store: store)
     }
     /// Restores a stored session only after cookie attributes and the server both confirm it.
     func restore() async {
+        validating = true; restoreFailure = nil
         defer { validating = false }
         let before = username
         let my = service.beginOperation()
         do {
-            let r = try await service.restore(fetch: Self.fetchHomepage, token: my)
+            let r = try await service.restore(fetch: fetch, token: my)
             guard service.isCurrent(my) else { return }
             if let s = r { auth?.setValidated(s); username = s.username }
             else { auth?.revoke(); username = nil }
-        } catch { guard service.isCurrent(my) else { return }; auth?.revoke(); username = nil }  // unverifiable (e.g. offline): no credentials sent until validated
+        } catch { guard service.isCurrent(my) else { return }; auth?.revoke(); username = nil; restoreFailure = "Check your connection and try again, or sign in again." }  // unverifiable (e.g. offline): no credentials sent until validated
         if username != before { epoch += 1 }   // rebuild views only on a real account change
     }
     func complete(with cookies: [HTTPCookie]) async -> Bool {
         let mapped = cookies.map { WebCookie(name: $0.name, value: $0.value, domain: $0.domain, path: $0.path, expires: $0.expiresDate, secure: $0.isSecure) }
         let my = service.beginOperation()
         do {
-            let s = try await service.complete(cookies: mapped, fetch: Self.fetchHomepage, token: my)
+            let s = try await service.complete(cookies: mapped, fetch: fetch, token: my)
             guard service.isCurrent(my) else { return false }
-            auth?.setValidated(s); username = s.username; failure = nil; epoch += 1; return true
+            auth?.setValidated(s); username = s.username; failure = nil; restoreFailure = nil; epoch += 1; return true
         } catch { failure = "Letterboxd did not confirm a signed-in account yet. Finish signing in on the page, then tap Done."; return false }
     }
     /// Removes the Keychain session and any web data left for the site.
@@ -135,7 +149,6 @@ struct SignInScreen: View {
 
 struct AccountButton: ToolbarContent {
     @Environment(AccountModel.self) private var account
-    @Binding var showSignIn: Bool
     var body: some ToolbarContent {
         ToolbarItem(placement: .topBarTrailing) {
             if let u = account.username {
@@ -143,10 +156,7 @@ struct AccountButton: ToolbarContent {
                     Text("Signed in as \(u)")
                     Button("Sign out", role: .destructive) { Task { await account.signOut() } }
                 } label: { Image(systemName: "person.crop.circle.fill") }
-            } else if account.validating {
-                ProgressView()
-            } else {
-                Button { showSignIn = true } label: { Text("Sign in").font(.subheadline.weight(.semibold)) }
+                .accessibilityLabel("Account")
             }
         }
     }

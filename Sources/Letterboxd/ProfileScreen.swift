@@ -17,7 +17,7 @@ struct ProfileScreen: View {
     @State private var draft = ""
 
     var body: some View {
-        let svc = env.service, u = env.username
+        let u = env.username
         VStack(spacing: 0) {
             header
             Picker("Section", selection: $tab) { ForEach(ProfileTab.allCases) { Text($0.rawValue).tag($0) } }
@@ -35,7 +35,7 @@ struct ProfileScreen: View {
         .onAppear { if profile == nil { reset() } }
         .onChange(of: env.username) { _, _ in reset() }
         .navigationDestination(for: ActivityEntry.self) { EntryScreen(entry: $0) }
-        .id(u + String(describing: svc is FixtureService))
+        .id(u)
     }
 
     private func reset() {

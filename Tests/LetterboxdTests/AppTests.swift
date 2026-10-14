@@ -4,10 +4,6 @@ import LetterboxdKit
 
 @MainActor
 final class AppTests: XCTestCase {
-    func testLiveIsDefaultAndFixtureOnlyByArgument() {
-        XCTAssertFalse(AppEnvironment.make().isFixtureMode)
-        XCTAssertFalse(AppEnvironment.make().service is FixtureService)
-    }
     func testPagedLoaderAppendsWithoutDuplicates() async {
         let l = PagedLoader<FilmSummary> { p, _ in
             Page(items: p == 1 ? [FilmSummary(slug: "a", title: "A", year: nil)] : [FilmSummary(slug: "a", title: "A", year: nil), FilmSummary(slug: "b", title: "B", year: nil)], page: p, hasNext: p == 1) }

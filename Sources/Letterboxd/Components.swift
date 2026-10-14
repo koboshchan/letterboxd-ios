@@ -43,7 +43,7 @@ struct PosterView: View {
         .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.hairline))
         .accessibilityLabel(film.title)
         .task(id: film.slug) {
-            guard film.posterURL == nil, !env.isFixtureMode else { return }
+            guard film.posterURL == nil else { return }
             resolved = await PosterGate.shared.url(for: film.slug, using: env.service)
         }
     }

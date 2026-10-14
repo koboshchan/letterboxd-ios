@@ -12,7 +12,7 @@ struct LetterboxdApp: App {
                 .environment(account)
                 .preferredColorScheme(.dark)
                 .tint(Theme.green)
-                .task { account.auth = env.auth; await account.restore() }
+                .task { account.auth = env.auth; account.onUsernameChange = { [env] u in env.username = u ?? "" }; await account.restore() }
         }
     }
 }
@@ -25,55 +25,79 @@ enum Theme {
     static let hairline = Color.white.opacity(0.1)
 }
 
-/// Holds the replaceable data layer. Live is the default; fixtures only via the explicit launch argument.
+/// Holds the live data layer. There is no demo, guest or fixture mode in the shipped app.
 @Observable @MainActor
 final class AppEnvironment {
     let service: LetterboxdService
-    let isFixtureMode: Bool
     let auth: AuthAuthority
-    static let defaultUsername = "koboshchan"
-    var username = AppEnvironment.defaultUsername
-    /// Launch-argument hooks for deterministic screenshots only (-UITab N, -UISegment N, -UIFilm slug).
-    static func arg(_ k: String) -> String? { let a = ProcessInfo.processInfo.arguments; return a.firstIndex(of: k).flatMap { a.indices.contains($0 + 1) ? a[$0 + 1] : nil } }
-    init(service: LetterboxdService, fixture: Bool, auth: AuthAuthority = AuthAuthority()) { self.service = service; self.isFixtureMode = fixture; self.auth = auth }
+    /// Member being viewed; set only from a server-validated session (empty while signed out, never shown then).
+    var username = ""
+    /// Launch-argument hooks for deterministic screenshots, compiled into DEBUG builds only. They only pick a tab/segment
+    /// inside the authenticated UI and cannot bypass the sign-in gate.
+    static func arg(_ k: String) -> String? {
+        #if DEBUG
+        let a = ProcessInfo.processInfo.arguments; return a.firstIndex(of: k).flatMap { a.indices.contains($0 + 1) ? a[$0 + 1] : nil }
+        #else
+        return nil
+        #endif
+    }
+    init(service: LetterboxdService, auth: AuthAuthority = AuthAuthority()) { self.service = service; self.auth = auth }
     static func make() -> AppEnvironment {
-        if ProcessInfo.processInfo.arguments.contains("-UIFixtureMode") { return AppEnvironment(service: FixtureService(), fixture: true) }
         // Credentials come only from the in-memory, server-validated AuthAuthority (never read raw from the Keychain).
         let auth = AuthAuthority()
         let transport = URLSessionTransport(cookieHeader: { auth.cookieHeader() })
-        return AppEnvironment(service: PublicWebService(fetcher: Fetcher(transport: transport, auth: auth)), fixture: false, auth: auth)
+        return AppEnvironment(service: PublicWebService(fetcher: Fetcher(transport: transport, auth: auth)), auth: auth)
     }
 }
 
 struct RootView: View {
     @Environment(AppEnvironment.self) private var env
-    @State private var browsePath: [FilmSummary] = AppEnvironment.arg("-UIFilm").map { [FilmSummary(slug: $0, title: AppEnvironment.arg("-UIFilmTitle") ?? $0, year: nil)] } ?? []
     @Environment(AccountModel.self) private var account
+    @State private var browsePath: [FilmSummary] = AppEnvironment.arg("-UIFilm").map { [FilmSummary(slug: $0, title: AppEnvironment.arg("-UIFilmTitle") ?? $0, year: nil)] } ?? []
     @State private var showSignIn = ProcessInfo.processInfo.arguments.contains("-UISignIn")
     @State private var selection = Int(AppEnvironment.arg("-UITab") ?? "0") ?? 0
     var body: some View {
-        TabView(selection: $selection) {
-            Tab("Profile", systemImage: "person.crop.circle", value: 0) { NavigationStack { ProfileScreen().fixtureBanner(env.isFixtureMode).toolbar { AccountButton(showSignIn: $showSignIn) } } }
-            Tab("Browse", systemImage: "film.stack", value: 1) { NavigationStack(path: $browsePath) { BrowseScreen().fixtureBanner(env.isFixtureMode) } }
-            Tab("Search", systemImage: "magnifyingglass", value: 2, role: .search) { NavigationStack { SearchScreen().fixtureBanner(env.isFixtureMode) } }
-            Tab("About", systemImage: "info.circle", value: 3) { NavigationStack { AboutScreen() } }
+        // Nothing but the gate renders until the server has validated a session in this launch.
+        Group {
+            switch account.gate {
+            case .checking: GateScreen(title: "Checking your sign-in", detail: nil, busy: true)
+            case .restoreFailed(let why): GateScreen(title: "Couldn't confirm your sign-in", detail: why, busy: false, retry: { Task { await account.restore() } }, signIn: { showSignIn = true })
+            case .signInRequired: GateScreen(title: "Sign in to Letterboxd", detail: "This app needs your Letterboxd account. You sign in on letterboxd.com itself; the app never sees your password.", busy: false, signIn: { showSignIn = true })
+            case .ready: tabs
+            }
         }
         .background(Color.black)
         .id(account.epoch)   // every auth change rebuilds all tabs and their loaded models
-        // Any auth change (including logout to nil) resets the viewed username and rebuilds all loaded models.
-        .onChange(of: account.username) { _, u in env.username = u ?? AppEnvironment.defaultUsername }
         .sheet(isPresented: $showSignIn) { SignInScreen() }
+    }
+    private var tabs: some View {
+        TabView(selection: $selection) {
+            Tab("Profile", systemImage: "person.crop.circle", value: 0) { NavigationStack { ProfileScreen().toolbar { AccountButton() } } }
+            Tab("Browse", systemImage: "film.stack", value: 1) { NavigationStack(path: $browsePath) { BrowseScreen() } }
+            Tab("Search", systemImage: "magnifyingglass", value: 2, role: .search) { NavigationStack { SearchScreen() } }
+            Tab("About", systemImage: "info.circle", value: 3) { NavigationStack { AboutScreen() } }
+        }
     }
 }
 
-extension View {
-    func fixtureBanner(_ on: Bool) -> some View {
-        safeAreaInset(edge: .top, spacing: 0) {
-            if on {
-                Text("FIXTURE DATA - UI TEST MODE, NOT LIVE")
-                    .font(.caption2.weight(.bold)).foregroundStyle(.black)
-                    .frame(maxWidth: .infinity).padding(.vertical, 3).background(Theme.orange)
-            }
+/// Full-screen state shown instead of any app content while signed out, validating, or when validation failed.
+struct GateScreen: View {
+    let title: String
+    let detail: String?
+    let busy: Bool
+    var retry: (() -> Void)? = nil
+    var signIn: (() -> Void)? = nil
+    var body: some View {
+        VStack(spacing: 18) {
+            Spacer()
+            if busy { ProgressView().controlSize(.large) }
+            else { Image(systemName: "person.crop.circle.badge.checkmark").font(.system(size: 56)).foregroundStyle(Theme.green).accessibilityHidden(true) }
+            Text(title).font(.title2.bold()).multilineTextAlignment(.center)
+            if let d = detail { Text(d).font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center).padding(.horizontal, 32) }
+            if let retry { Button("Try again", action: retry).buttonStyle(.bordered).tint(Theme.green) }
+            if let signIn { Button(action: signIn) { Text("Sign in").font(.headline).frame(maxWidth: 280, minHeight: 44) }.buttonStyle(.borderedProminent).tint(Theme.green).foregroundStyle(.black) }
+            Spacer()
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity).background(Color.black)
     }
 }
