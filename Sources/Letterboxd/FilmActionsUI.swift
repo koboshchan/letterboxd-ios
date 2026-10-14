@@ -10,8 +10,8 @@ final class FilmActionsModel {
     private(set) var busy = false
     private(set) var error: String?
     private let actions: FilmActions?, auth: AuthAuthority, slug: String
-    private var handle: FilmHandle?
     init(actions: FilmActions?, auth: AuthAuthority, slug: String) { self.actions = actions; self.auth = auth; self.slug = slug }
+    var signedOut: Bool { auth.cookieHeader() == nil }
     var available: Bool { actions != nil }
 
     private func run(_ body: @escaping (FilmActions, FilmHandle, Int) async throws -> Void) async {
@@ -21,12 +21,12 @@ final class FilmActionsModel {
         defer { busy = false }
         do {
             let h: FilmHandle
-            if let c = handle { h = c } else { h = try await actions.handle(slug: slug); handle = h }
+            h = try await actions.handle(slug: slug)   // fresh each time: the csrf token rotates
             try await body(actions, h, g)
         } catch LetterboxdError.cancelled { /* auth changed: nothing is applied */ }
         catch AuthError.notSignedIn { error = "Sign in again to do this." }
         catch LetterboxdError.blocked { error = "Letterboxd asked for a human check. Open the film on letterboxd.com." }
-        catch { error = "Couldn't update. Nothing was changed." }
+        catch { error = "Couldn't confirm the change with Letterboxd." }
     }
     func toggleWatchlist() async {
         let target = watchlist != .on
@@ -58,7 +58,7 @@ struct FilmActionBar: View {
                     Button { Task { await model.toggleLike() } } label: {
                         Label(model.liked == .on ? "Liked" : "Like", systemImage: model.liked == .on ? "heart.fill" : "heart")
                     }.accessibilityIdentifier("like-button")
-                }.buttonStyle(.bordered).disabled(model.busy)
+                }.buttonStyle(.bordered).disabled(model.busy || model.signedOut)
                 if let e = model.error { Text(e).font(.footnote).foregroundStyle(.secondary) }
             }
         }

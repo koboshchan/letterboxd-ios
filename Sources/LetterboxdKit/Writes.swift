@@ -73,13 +73,32 @@ public final class FilmActions: Sendable {
         }
     }
     public func setWatchlist(_ f: FilmHandle, on: Bool) async throws {
-        try await guarded { _ in
+        guard let member = auth.username else { throw AuthError.notSignedIn }
+        try await guarded { g in
             try Task.checkCancellation()
             let u = URL(string: "https://letterboxd.com/api/v0/me/watchlist/\(f.lid)")!
             let body = try JSONSerialization.data(withJSONObject: ["inWatchlist": on])
             let r = try await transport.send(WriteRequest(method: "PATCH", url: u, contentType: "application/json; charset=UTF-8", body: body, headers: ["x-csrf-token": f.csrf]))
             try check(r)
+            guard auth.generation == g else { throw LetterboxdError.cancelled }
+            // PATCH answers 200 {} which proves nothing: read the server's watchlist back and require the target state.
+            guard try await watchlistContains(f.slug, member: member) == on else { throw LetterboxdError.parse("watchlist readback mismatch") }
         }
+    }
+    /// Reads the signed-in member's watchlist pages (plain authenticated GET, uncached) for the film. Bounded; an
+    /// unfinished scan is an error, never a guess.
+    func watchlistContains(_ slug: String, member: String) async throws -> Bool {
+        let name = try Validate.username(member)
+        for page in 1...25 {
+            try Task.checkCancellation()
+            let path = page == 1 ? "watchlist/" : "watchlist/page/\(page)/"
+            let r = try await transport.get(try Validate.url(URL(string: "https://letterboxd.com/\(name)/\(path)")!), accept: "text/html")
+            try check(r)
+            let p = try Parsers.filmGrid(html: String(decoding: r.data, as: UTF8.self), page: page)
+            if p.items.contains(where: { $0.slug == slug }) { return true }
+            if !p.hasNext { return false }
+        }
+        throw LetterboxdError.parse("watchlist too long to verify")
     }
     public func setLike(_ f: FilmHandle, liked: Bool) async throws -> LikeResult {
         try await guarded { _ in

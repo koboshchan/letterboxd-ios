@@ -1,11 +1,17 @@
 import XCTest
 @testable import LetterboxdKit
 
-actor Rec { var reqs: [WriteRequest] = []; func add(_ r: WriteRequest) { reqs.append(r) }; func all() -> [WriteRequest] { reqs } }
+actor Rec { var reqs: [WriteRequest] = []; var onList = false; var ignorePatch = false
+    func add(_ r: WriteRequest) { reqs.append(r); if r.method == "PATCH", !ignorePatch { onList = String(decoding: r.body, as: UTF8.self).contains("true") } }
+    func all() -> [WriteRequest] { reqs }; func setIgnore() { ignorePatch = true } }
 struct WT: HTTPTransport {
     let rec: Rec; let status: Int; let likeJSON: String
     func get(_ url: URL, accept: String) async throws -> HTTPResult {
-        HTTPResult(data: Data(#"{"result":true,"csrf":"TOK+/=","lid":"2a9q","id":51568,"slug":"x"}"#.utf8), status: 200)
+        if url.path.contains("watchlist") {
+            let on = await rec.onList
+            let h = on ? #"<li><div data-item-slug="fight-club" data-item-name="T (2000)"></div></li>"# : ""
+            return HTTPResult(data: Data("<html><body><ul>\(h)</ul></body></html>".utf8), status: 200) }
+        return HTTPResult(data: Data(#"{"result":true,"csrf":"TOK+/=","lid":"2a9q","id":51568,"slug":"x"}"#.utf8), status: 200)
     }
     func send(_ r: WriteRequest) async throws -> HTTPResult { await rec.add(r); return HTTPResult(data: Data((r.method == "PATCH" ? "{}" : likeJSON).utf8), status: status) }
 }
@@ -26,6 +32,12 @@ final class WriteTests: XCTestCase {
         XCTAssertEqual(q.method, "PATCH"); XCTAssertEqual(q.url.absoluteString, "https://letterboxd.com/api/v0/me/watchlist/2a9q")
         XCTAssertEqual(q.headers["x-csrf-token"], "TOK+/="); XCTAssertTrue(q.contentType.hasPrefix("application/json"))
         XCTAssertEqual(String(decoding: q.body, as: UTF8.self), #"{"inWatchlist":true}"#)
+        try await f.setWatchlist(h, on: false)   // readback confirms removal too
+    }
+    func testWatchlistReadbackMismatchFails() async throws {
+        let (f, rec) = actions(auth()); await rec.setIgnore()
+        let h = FilmHandle(slug: "fight-club", lid: "2a9q", id: 51568, csrf: "c")
+        do { try await f.setWatchlist(h, on: true); XCTFail("200 {} without server state must not count") } catch { XCTAssertTrue("\(error)".contains("readback")) }
     }
     func testLikeWireFormatEncodesCSRF() async throws {
         let (f, rec) = actions(auth()); let h = try await f.handle(slug: "fight-club")
