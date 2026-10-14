@@ -1,0 +1,9 @@
+{
+  "fixture": "authenticated-identity.sanitized.html",
+  "sha256": "4b2b9817cae88077455df7342972a1e9a8645123f9180bca6bc42bf92524e966",
+  "usernameRegex": "person\\.username\\s*=\\s*\"([^\"]+)\"",
+  "loggedInRegex": "person\\.loggedIn\\s*=\\s*(true|false)",
+  "parsedUsername": "example-member",
+  "parsedLoggedIn": true,
+  "pass": true
+}

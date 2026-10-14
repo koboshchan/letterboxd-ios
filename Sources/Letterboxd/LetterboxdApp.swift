@@ -12,6 +12,7 @@ struct LetterboxdApp: App {
                 .environment(account)
                 .preferredColorScheme(.dark)
                 .tint(Theme.green)
+                .task { await account.restore() }
         }
     }
 }
@@ -35,13 +36,17 @@ final class AppEnvironment {
     init(service: LetterboxdService, fixture: Bool) { self.service = service; self.isFixtureMode = fixture }
     static func make() -> AppEnvironment {
         if ProcessInfo.processInfo.arguments.contains("-UIFixtureMode") { return AppEnvironment(service: FixtureService(), fixture: true) }
-        return AppEnvironment(service: PublicWebService(), fixture: false)
+        let store = KeychainSessionStore()
+        // Signed-in reads: the stored (server-validated) session cookie goes only to https://letterboxd.com.
+        let transport = URLSessionTransport(cookieHeader: { (try? store.load())?.header() })
+        return AppEnvironment(service: PublicWebService(fetcher: Fetcher(transport: transport)), fixture: false)
     }
 }
 
 struct RootView: View {
     @Environment(AppEnvironment.self) private var env
     @State private var browsePath: [FilmSummary] = AppEnvironment.arg("-UIFilm").map { [FilmSummary(slug: $0, title: AppEnvironment.arg("-UIFilmTitle") ?? $0, year: nil)] } ?? []
+    @Environment(AccountModel.self) private var account
     @State private var showSignIn = ProcessInfo.processInfo.arguments.contains("-UISignIn")
     @State private var selection = Int(AppEnvironment.arg("-UITab") ?? "0") ?? 0
     var body: some View {
@@ -52,6 +57,7 @@ struct RootView: View {
             Tab("About", systemImage: "info.circle", value: 3) { NavigationStack { AboutScreen() } }
         }
         .background(Color.black)
+        .onChange(of: account.username) { _, u in if let u { env.username = u } }
         .sheet(isPresented: $showSignIn) { SignInScreen() }
     }
 }

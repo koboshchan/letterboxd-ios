@@ -13,10 +13,13 @@ struct KeychainSessionStore: SessionStore {
         guard st == errSecSuccess, let d = r as? Data else { throw NSError(domain: NSOSStatusErrorDomain, code: Int(st)) }
         return try JSONDecoder().decode(Session.self, from: d)
     }
+    private func check(_ st: OSStatus) throws { guard st == errSecSuccess else { throw NSError(domain: NSOSStatusErrorDomain, code: Int(st)) } }
     func save(_ s: Session) throws {
-        try clear()
-        let st = SecItemAdd(q.merging([kSecValueData as String: try JSONEncoder().encode(s), kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly]) { $1 } as CFDictionary, nil)
-        guard st == errSecSuccess else { throw NSError(domain: NSOSStatusErrorDomain, code: Int(st)) }
+        let data = try JSONEncoder().encode(s)
+        let st = SecItemUpdate(q as CFDictionary, [kSecValueData as String: data] as CFDictionary)
+        if st == errSecItemNotFound {
+            try check(SecItemAdd(q.merging([kSecValueData as String: data, kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly]) { $1 } as CFDictionary, nil))
+        } else { try check(st) }
     }
-    func clear() throws { SecItemDelete(q as CFDictionary) }
+    func clear() throws { let st = SecItemDelete(q as CFDictionary); if st != errSecItemNotFound { try check(st) } }
 }

@@ -3,8 +3,14 @@ import Foundation
 /// Opaque authenticated session. Never logged, never persisted outside a SessionStore.
 public struct Session: Codable, Sendable, Equatable {
     public let username: String
-    public let cookies: [String: String]   // name -> value; secret
-    public init(username: String, cookies: [String: String]) { self.username = username; self.cookies = cookies }
+    public let cookies: [WebCookie]   // full attributes; secret values
+    public let storedAt: Date
+    public init(username: String, cookies: [WebCookie], storedAt: Date = Date()) { self.username = username; self.cookies = cookies; self.storedAt = storedAt }
+    /// Cookie header for https://letterboxd.com/ from unexpired cookies only (session cookies bounded by storedAt + max age).
+    public func header(now: Date = Date()) -> String {
+        cookies.filter { ($0.expires ?? storedAt.addingTimeInterval(SessionCookies.maxSessionCookieAge)) > now }
+            .map { "\($0.name)=\($0.value)" }.joined(separator: "; ")
+    }
 }
 
 /// Secure persistence abstraction. App provides a Keychain implementation; tests use memory.
@@ -24,8 +30,8 @@ public final class InMemorySessionStore: SessionStore, @unchecked Sendable {
 
 public enum AuthError: Error, Equatable, Sendable { case unsupported(String), badCredentials, verificationRequired, notSignedIn }
 
-/// Authenticated capabilities. No live implementation exists: the real login/write endpoints
-/// were NOT discovered (capture hit a security verification wall), so none are guessed.
+/// Authenticated capabilities. Sessions come only from the interactive web sign-in (see LiveAccountService); native
+/// password sign-in, two-factor (TOTP) entry, and all writes are unsupported because their requests were never verified.
 public protocol AccountService: Sendable {
     func signIn(email: String, password: String) async throws -> Session
     func signOut() async throws

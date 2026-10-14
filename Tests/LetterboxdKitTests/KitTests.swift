@@ -113,8 +113,8 @@ final class KitTests: XCTestCase {
     }
     func testDiaryFiltersToWatchedEntries() async throws {
         let svc = PublicWebService(fetcher: Fetcher(transport: StubTransport { _ in HTTPResult(data: try fixture("rss", "xml"), status: 200) }))
-        let d = try await svc.diary(username: "kobosh", refresh: false); XCTAssertEqual(d.count, 2)
-        let r = try await svc.reviews(username: "kobosh", refresh: false); XCTAssertEqual(r.count, 1)
+        let d = try await svc.diary(username: "example-member", refresh: false); XCTAssertEqual(d.count, 2)
+        let r = try await svc.reviews(username: "example-member", refresh: false); XCTAssertEqual(r.count, 1)
     }
 }
 final class RecordedTests: XCTestCase {
@@ -147,7 +147,7 @@ final class RecordedTests: XCTestCase {
 final class AuthTests: XCTestCase {
     func testStoreRoundTripAndClear() throws {
         let s = InMemorySessionStore(); XCTAssertNil(try s.load())
-        try s.save(Session(username: "u", cookies: ["a": "b"])); XCTAssertEqual(try s.load()?.username, "u")
+        try s.save(Session(username: "u", cookies: [WebCookie(name: "a", value: "b", domain: "letterboxd.com")])); XCTAssertEqual(try s.load()?.username, "u")
         try s.clear(); XCTAssertNil(try s.load())
     }
     func testUnavailableServiceIsHonest() async {
@@ -161,12 +161,63 @@ final class SignInTests: XCTestCase {
         do { _ = try await LiveAccountService(store: InMemorySessionStore()).signIn(email: "u", password: "p"); XCTFail() } catch { XCTAssertEqual(error as? AuthError, .verificationRequired) }
     }
     func wc(_ n: String, _ d: String = "letterboxd.com", path: String = "/", exp: Date? = nil, secure: Bool = true) -> WebCookie { WebCookie(name: n, value: "v", domain: d, path: path, expires: exp, secure: secure) }
-    let signedIn = "<script>person = { username: \"kobosh\", loggedIn: true, role: \"member\" }</script>"
+    var signedIn: String { String(decoding: try! Data(contentsOf: Bundle.module.url(forResource: "authenticated-identity.sanitized", withExtension: "html", subdirectory: "Fixtures/recorded")!), as: UTF8.self) }
     let guest = "<script>person = {\n username: \"\"\n , loggedIn: false\n , role: \"guest\" }</script>"
     func fetcher(_ status: Int, _ html: String) -> HomepageFetcher { { _ in (status, html) } }
     func testCookieFiltering() {
         let jar = SessionCookies.accept([wc("letterboxd.user.CURRENT"), wc("a", ".letterboxd.com"), wc("b", "evil.example"), wc("c", "letterboxd.com.evil.example"), wc("d", "x.letterboxd.com"), wc("e", path: "/x"), wc("f", secure: false), wc("g", exp: Date(timeIntervalSince1970: 1))])
-        XCTAssertEqual(Set(jar!.keys), ["letterboxd.user.CURRENT", "a"])
+        XCTAssertEqual(Set(jar!.map(\.name)), ["letterboxd.user.CURRENT", "a"])
+    }
+    func testIdentityParsesExplicitAssignmentsOnly() {
+        XCTAssertEqual(IdentityCheck.username(fromHomepage: signedIn), "example-member")
+        let guestThenAuth = guest + "<script>person.username = \"abc\"; person.loggedIn = true</script>"
+        XCTAssertEqual(IdentityCheck.username(fromHomepage: guestThenAuth), "abc")
+        XCTAssertNil(IdentityCheck.username(fromHomepage: guest))
+        XCTAssertNil(IdentityCheck.username(fromHomepage: "<script>person.username = \"a\"; person.username = \"b\"; person.loggedIn = true</script>"))
+        XCTAssertNil(IdentityCheck.username(fromHomepage: "<script>person.username = \"a\"; person.loggedIn = true; person.loggedIn = false</script>"))
+        XCTAssertNil(IdentityCheck.username(fromHomepage: "<script>person.username = \"a b\"; person.loggedIn = true</script>"))
+        XCTAssertNil(IdentityCheck.username(fromHomepage: "<script>x = { username: \"a\", loggedIn: true }</script>"))
+        XCTAssertNil(IdentityCheck.username(fromHomepage: "<script>person.username = \"\"; person.loggedIn = true</script>"))
+    }
+    func testCookieScopingHostOnlyAndAmbiguity() {
+        let n = "letterboxd.user.CURRENT"
+        XCTAssertNil(SessionCookies.accept([WebCookie(name: n, value: "v", domain: "www.letterboxd.com")]))
+        XCTAssertNil(SessionCookies.accept([WebCookie(name: n, value: "v", domain: ".www.letterboxd.com")]))
+        XCTAssertNil(SessionCookies.accept([WebCookie(name: n, value: "a", domain: "letterboxd.com"), WebCookie(name: n, value: "b", domain: ".letterboxd.com")]))
+        XCTAssertEqual(SessionCookies.accept([WebCookie(name: n, value: "a", domain: "letterboxd.com"), WebCookie(name: n, value: "a", domain: ".letterboxd.com")])?.count, 1)
+        XCTAssertNil(SessionCookies.accept([WebCookie(name: n, value: "a", domain: "letterboxd.com", path: "/x")]))
+    }
+    func testSessionCookieLifetimeBounded() {
+        let n = "letterboxd.user.CURRENT", c = WebCookie(name: n, value: "v", domain: "letterboxd.com")
+        let t0 = Date(timeIntervalSince1970: 1_000_000)
+        XCTAssertNotNil(SessionCookies.accept([c], now: t0.addingTimeInterval(86400), storedAt: t0))
+        XCTAssertNil(SessionCookies.accept([c], now: t0.addingTimeInterval(31 * 86400), storedAt: t0))
+        XCTAssertFalse(Session(username: "u", cookies: [c], storedAt: t0).header(now: t0.addingTimeInterval(86400)).isEmpty)
+        XCTAssertTrue(Session(username: "u", cookies: [c], storedAt: t0).header(now: t0.addingTimeInterval(31 * 86400)).isEmpty)
+    }
+    func testEmptySessionValueAndDuplicatesCollapse() {
+        XCTAssertNil(SessionCookies.accept([WebCookie(name: "letterboxd.user.CURRENT", value: "", domain: "letterboxd.com")]))
+        let jar = SessionCookies.accept([WebCookie(name: "letterboxd.user.CURRENT", value: "apex", domain: ".letterboxd.com"), WebCookie(name: "letterboxd.user.CURRENT", value: "apex", domain: ".letterboxd.com"), wc("z")])!
+        XCTAssertEqual(jar.count, 2)
+    }
+    func testSessionRoundTripKeepsAttributes() throws {
+        let c = WebCookie(name: "letterboxd.user.CURRENT", value: "v", domain: ".letterboxd.com", path: "/", expires: Date(timeIntervalSince1970: 4_000_000_000), secure: true)
+        let s = Session(username: "u", cookies: [c]); XCTAssertEqual(try JSONDecoder().decode(Session.self, from: JSONEncoder().encode(s)), s)
+    }
+    func testRestoreRevalidatesAndClears() async throws {
+        let far = Date().addingTimeInterval(86400)
+        let ok = Session(username: "example-member", cookies: [WebCookie(name: "letterboxd.user.CURRENT", value: "v", domain: "letterboxd.com", expires: far)])
+        var s: InMemorySessionStore! = InMemorySessionStore(); try s.save(ok)
+        let r = try await LiveAccountService(store: s).restore(fetch: fetcher(200, signedIn)); XCTAssertEqual(r?.username, "example-member")
+        for (st, h) in [(200, guest), (200, signedIn.replacingOccurrences(of: "example-member", with: "other")), (302, signedIn)] {
+            s = InMemorySessionStore(); try s.save(ok)
+            let r = try await LiveAccountService(store: s).restore(fetch: fetcher(st, h)); XCTAssertNil(r); XCTAssertNil(try s.load())
+        }
+        s = InMemorySessionStore(); try s.save(Session(username: "example-member", cookies: [WebCookie(name: "letterboxd.user.CURRENT", value: "v", domain: "letterboxd.com", expires: Date(timeIntervalSince1970: 1))]))
+        let rr = try await LiveAccountService(store: s).restore(fetch: fetcher(200, signedIn)); XCTAssertNil(rr); XCTAssertNil(try s.load())
+        s = InMemorySessionStore(); try s.save(ok)
+        do { _ = try await LiveAccountService(store: s).restore(fetch: { _ in throw LetterboxdError.network("x") }); XCTFail() } catch {}
+        XCTAssertNotNil(try s.load())
     }
     func testExpiredOrInsecureSessionCookieRejected() {
         XCTAssertNil(SessionCookies.accept([wc("letterboxd.user.CURRENT", exp: Date(timeIntervalSince1970: 1))]))
@@ -176,7 +227,7 @@ final class SignInTests: XCTestCase {
     func testServerConfirmedIdentityStoresServerUsername() async throws {
         let s = InMemorySessionStore()
         let sess = try await LiveAccountService(store: s).complete(cookies: [wc("letterboxd.user.CURRENT")], fetch: fetcher(200, signedIn))
-        XCTAssertEqual(sess.username, "kobosh"); XCTAssertEqual(try s.load(), sess)
+        XCTAssertEqual(sess.username, "example-member"); XCTAssertEqual(try s.load(), sess)
     }
     func testCookiePresenceAloneIsNotSignedIn() async {
         for (st, h) in [(200, guest), (302, signedIn), (200, "<html>sign in</html>"), (403, "")] {
@@ -204,7 +255,7 @@ final class SignInTests: XCTestCase {
         XCTAssertGreaterThan(p.items.count, 40); XCTAssertTrue(p.items.allSatisfy { !$0.slug.isEmpty && !$0.title.isEmpty })
     }
     func testSignOutClears() async throws {
-        let s = InMemorySessionStore(); try s.save(Session(username: "u", cookies: [:]))
+        let s = InMemorySessionStore(); try s.save(Session(username: "u", cookies: []))
         try await LiveAccountService(store: s).signOut(); XCTAssertNil(try s.load())
     }
     func testLoginTemplateRecordsCaptchaRequirement() throws {

@@ -1,7 +1,7 @@
 import Foundation
 
 /// A cookie as reported by the web view's cookie store.
-public struct WebCookie: Sendable, Equatable {
+public struct WebCookie: Codable, Sendable, Equatable {
     public let name, value, domain, path: String
     public let expires: Date?     // nil = session cookie
     public let secure: Bool
@@ -24,37 +24,52 @@ public enum NavigationPolicy {
 
 public enum SessionCookies {
     public static let sessionCookieName = "letterboxd.user.CURRENT"
-    static func hostMatches(_ domain: String) -> Bool {
-        let d = domain.lowercased(); return d == "letterboxd.com" || d == ".letterboxd.com" || d == "www.letterboxd.com"
+    /// Cookies with no expiry (session cookies) are trusted at most this long after we stored them.
+    public static let maxSessionCookieAge: TimeInterval = 30 * 86400
+    /// Applicability to a request for https://letterboxd.com/ : a host-only cookie must be for exactly letterboxd.com;
+    /// a domain cookie must be .letterboxd.com. www host-only cookies are never forwarded to the bare host. Path must be "/".
+    static func applies(_ c: WebCookie) -> Bool {
+        let d = c.domain.lowercased()
+        return d == "letterboxd.com" || d == ".letterboxd.com"
     }
-    /// Keeps only valid, unexpired, secure, root-path cookies for the exact site hosts. Returns nil without the session cookie.
-    public static func accept(_ cookies: [WebCookie], now: Date = Date()) -> [String: String]? {
-        var jar: [String: String] = [:]
+    /// Valid, unexpired, secure cookies that apply to https://letterboxd.com/, one per name. Identical duplicates collapse;
+    /// differing duplicates are ambiguous and dropped; an ambiguous or missing/empty session cookie yields nil.
+    public static func accept(_ cookies: [WebCookie], now: Date = Date(), storedAt: Date? = nil) -> [WebCookie]? {
+        var groups: [String: [WebCookie]] = [:]
         for c in cookies {
-            guard hostMatches(c.domain), c.secure, c.path == "/", !c.name.isEmpty, !c.value.isEmpty else { continue }
-            if let e = c.expires, e <= now { continue }
-            jar[c.name] = c.value
+            guard applies(c), c.secure, c.path == "/", !c.name.isEmpty, !c.value.isEmpty else { continue }
+            let end = c.expires ?? (storedAt ?? now).addingTimeInterval(maxSessionCookieAge)
+            guard end > now else { continue }
+            groups[c.name, default: []].append(c)
         }
-        return jar[sessionCookieName] == nil ? nil : jar
+        var out: [WebCookie] = []
+        for (_, g) in groups where Set(g.map(\.value)).count == 1 { out.append(g.max { ($0.expires ?? .distantFuture) < ($1.expires ?? .distantFuture) }!) }
+        guard out.contains(where: { $0.name == sessionCookieName }) else { return nil }
+        return out.sorted { $0.name < $1.name }
     }
 }
 
-/// Server-side identity check. A signed-in page bootstraps `person = { username: "...", loggedIn: true ... }`; guests get
-/// `username: "", loggedIn: false` (the guest form is observed in recorded pages; the signed-in form is NOT yet observed).
+/// Reads the explicit assignments the server emits on an authenticated homepage:
+/// `person.username = "name"` and `person.loggedIn = true` (recorded fixture authenticated-identity.sanitized.html).
+/// The guest default (`loggedIn: false` in an object literal) is not an assignment and is ignored.
+/// Ambiguous input (several differing usernames, any false assignment, none true) returns nil.
 public enum IdentityCheck {
+    static let userRE = try! NSRegularExpression(pattern: #"person\.username\s*=\s*"([^"\n]+)""#)
+    static let loggedRE = try! NSRegularExpression(pattern: #"person\.loggedIn\s*=\s*(true|false)\b"#)
+    static func captures(_ re: NSRegularExpression, _ s: String) -> [String] {
+        let ns = s as NSString
+        return re.matches(in: s, range: NSRange(location: 0, length: ns.length)).map { ns.substring(with: $0.range(at: 1)) }
+    }
     public static func username(fromHomepage html: String) -> String? {
-        guard let r = html.range(of: "person = {") else { return nil }
-        let chunk = String(html[r.upperBound...].prefix(400))
-        let compact = chunk.filter { !$0.isWhitespace }
-        guard compact.contains("loggedIn:true"),
-              let u = compact.range(of: "username:\"") else { return nil }
-        let name = compact[u.upperBound...].prefix { $0 != "\"" }
-        let s = String(name)
-        return (try? Validate.username(s)) != nil ? s : nil
+        let flags = captures(loggedRE, html)
+        guard !flags.isEmpty, flags.allSatisfy({ $0 == "true" }) else { return nil }
+        let names = Set(captures(userRE, html))
+        guard names.count == 1, let n = names.first, (try? Validate.username(n)) != nil else { return nil }
+        return n
     }
 }
 
-public typealias HomepageFetcher = @Sendable ([String: String]) async throws -> (status: Int, html: String)
+public typealias HomepageFetcher = @Sendable (Session) async throws -> (status: Int, html: String)
 
 /// Native sign-in is not implemented (the form needs a Turnstile token only the site's page can produce).
 /// Sign-in runs in an interactive web view; a session is stored ONLY after the server confirms the identity.
@@ -65,11 +80,22 @@ public final class LiveAccountService: AccountService, @unchecked Sendable {
     public func signIn(email: String, password: String) async throws -> Session { throw AuthError.verificationRequired }
 
     public func complete(cookies: [WebCookie], fetch: HomepageFetcher, now: Date = Date()) async throws -> Session {
-        guard let jar = SessionCookies.accept(cookies, now: now) else { throw AuthError.notSignedIn }
-        let r = try await fetch(jar)
+        guard let jar = SessionCookies.accept(cookies, now: now, storedAt: now) else { throw AuthError.notSignedIn }
+        let r = try await fetch(Session(username: "", cookies: jar, storedAt: now))
         guard r.status == 200, let name = IdentityCheck.username(fromHomepage: r.html) else { throw AuthError.notSignedIn }
-        let s = Session(username: name, cookies: jar)
+        let s = Session(username: name, cookies: jar, storedAt: now)
         try store.save(s); return s
+    }
+    /// Launch-time restore: re-validates stored cookie attributes and re-confirms identity with the server.
+    /// Invalid, expired or mismatched sessions are removed. A network failure keeps the stored session untouched.
+    public func restore(fetch: HomepageFetcher, now: Date = Date()) async throws -> Session? {
+        guard let s = try? store.load() else { try store.clear(); return nil }
+        guard let jar = SessionCookies.accept(s.cookies, now: now, storedAt: s.storedAt) else { try store.clear(); return nil }
+        let r = try await fetch(Session(username: s.username, cookies: jar, storedAt: s.storedAt))
+        guard r.status == 200, let name = IdentityCheck.username(fromHomepage: r.html), name.lowercased() == s.username.lowercased() else {
+            try store.clear(); return nil
+        }
+        return Session(username: name, cookies: jar, storedAt: s.storedAt)
     }
     public func signOut() async throws { try store.clear() }
     public func setWatchlist(slug: String, on: Bool) async throws { throw AuthError.unsupported("Watchlist writes are not verified.") }

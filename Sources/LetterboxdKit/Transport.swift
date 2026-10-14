@@ -13,7 +13,10 @@ public protocol HTTPTransport: Sendable {
 
 public struct URLSessionTransport: HTTPTransport {
     private let session: URLSession
-    public init(session: URLSession? = nil) {
+    private let cookieHeader: (@Sendable () -> String?)?
+    /// cookieHeader (optional) is attached ONLY to https://letterboxd.com requests, for the signed-in account.
+    public init(session: URLSession? = nil, cookieHeader: (@Sendable () -> String?)? = nil) {
+        self.cookieHeader = cookieHeader
         if let session { self.session = session; return }
         let c = URLSessionConfiguration.ephemeral
         c.timeoutIntervalForRequest = 20
@@ -25,6 +28,7 @@ public struct URLSessionTransport: HTTPTransport {
         var r = URLRequest(url: try Validate.url(url))
         r.httpMethod = "GET"
         r.setValue(accept, forHTTPHeaderField: "Accept")
+        if let h = cookieHeader?(), !h.isEmpty, r.url?.host == "letterboxd.com" { r.setValue(h, forHTTPHeaderField: "Cookie") }
         r.setValue("LetterboxdReader/0.1 (read-only personal client; user-triggered)", forHTTPHeaderField: "User-Agent")
         do {
             let (d, resp) = try await session.data(for: r)

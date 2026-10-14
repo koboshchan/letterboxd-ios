@@ -9,9 +9,17 @@ final class AccountModel {
     private let store: SessionStore
     var username: String?
     var failure: String?
+    /// True until the first server validation of any stored session finishes; UI must not show a stored name as signed in.
+    var validating = true
+    /// The web view's data store. Owned here so sign-out clears the store actually used.
+    private(set) var webStore = WKWebsiteDataStore.nonPersistent()
     init(store: SessionStore = KeychainSessionStore()) {
         self.store = store; service = LiveAccountService(store: store)
-        username = (try? store.load())?.username
+    }
+    /// Restores a stored session only after cookie attributes and the server both confirm it.
+    func restore() async {
+        defer { validating = false }
+        do { username = try await service.restore(fetch: Self.fetchHomepage)?.username } catch { username = nil }  // unreachable server: not shown as signed in until validated
     }
     func complete(with cookies: [HTTPCookie]) async -> Bool {
         let mapped = cookies.map { WebCookie(name: $0.name, value: $0.value, domain: $0.domain, path: $0.path, expires: $0.expiresDate, secure: $0.isSecure) }
@@ -22,31 +30,34 @@ final class AccountModel {
     }
     /// Removes the Keychain session and any web data left for the site.
     func signOut() async {
-        try? await service.signOut(); username = nil
-        let ds = WKWebsiteDataStore.default()
+        do { try await service.signOut() } catch { failure = "Could not remove the stored session."; return }
+        username = nil
+        let ds = webStore
         let recs = await ds.dataRecords(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes())
-        await ds.removeData(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(), for: recs.filter { $0.displayName.hasSuffix("letterboxd.com") })
+        await ds.removeData(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(), for: recs.filter { $0.displayName == "letterboxd.com" })
+        webStore = .nonPersistent()
     }
     private final class NoRedirect: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
         func urlSession(_ s: URLSession, task: URLSessionTask, willPerformHTTPRedirection r: HTTPURLResponse, newRequest: URLRequest) async -> URLRequest? { nil }
     }
-    @Sendable static func fetchHomepage(_ jar: [String: String]) async throws -> (status: Int, html: String) {
+    @Sendable static func fetchHomepage(_ session: Session) async throws -> (status: Int, html: String) {
         let c = URLSessionConfiguration.ephemeral; c.httpCookieStorage = nil; c.httpShouldSetCookies = false
         var r = URLRequest(url: URL(string: "https://letterboxd.com/")!)
-        r.setValue(jar.map { "\($0.key)=\($0.value)" }.joined(separator: "; "), forHTTPHeaderField: "Cookie")
+        r.setValue(session.header(), forHTTPHeaderField: "Cookie")
         r.setValue("LetterboxdReader/0.1 (personal client; user-triggered)", forHTTPHeaderField: "User-Agent")
         let (d, resp) = try await URLSession(configuration: c, delegate: NoRedirect(), delegateQueue: nil).data(for: r)
         return ((resp as? HTTPURLResponse)?.statusCode ?? 0, String(decoding: d, as: UTF8.self))
     }
 }
 
-/// The site's own sign-in page. No injected scripts, no message handlers: the app never sees the password or captcha.
+/// The site's own sign-in page. No injected scripts or message handlers, so the app does not intercept or store the password or captcha token.
 struct SiteWebView: UIViewRepresentable {
+    let store: WKWebsiteDataStore
     let onReady: (WKWebView) -> Void
     func makeCoordinator() -> Coordinator { Coordinator() }
     func makeUIView(context: Context) -> WKWebView {
         let cfg = WKWebViewConfiguration()
-        cfg.websiteDataStore = .nonPersistent()
+        cfg.websiteDataStore = store
         cfg.preferences.javaScriptCanOpenWindowsAutomatically = false
         let v = WKWebView(frame: .zero, configuration: cfg)
         v.navigationDelegate = context.coordinator; v.uiDelegate = context.coordinator
@@ -71,7 +82,7 @@ struct SignInScreen: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                SiteWebView { web = $0 }
+                SiteWebView(store: account.webStore) { web = $0 }
                 if let f = account.failure {
                     Text(f).font(.footnote).foregroundStyle(Theme.orange).padding(12).frame(maxWidth: .infinity, alignment: .leading).background(Theme.card)
                 }
@@ -85,7 +96,7 @@ struct SignInScreen: View {
                 }
             }
             .safeAreaInset(edge: .bottom, spacing: 0) {
-                Text("You sign in on letterboxd.com itself. This app never sees your password.")
+                Text("You sign in on letterboxd.com itself. This app hosts the page but does not read or store your password.")
                     .font(.caption2).foregroundStyle(.secondary).padding(8).frame(maxWidth: .infinity).background(.black)
             }
         }
@@ -110,6 +121,8 @@ struct AccountButton: ToolbarContent {
                     Text("Signed in as \(u)")
                     Button("Sign out", role: .destructive) { Task { await account.signOut() } }
                 } label: { Image(systemName: "person.crop.circle.fill") }
+            } else if account.validating {
+                ProgressView()
             } else {
                 Button { showSignIn = true } label: { Text("Sign in").font(.subheadline.weight(.semibold)) }
             }

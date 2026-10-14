@@ -1,0 +1,18 @@
+{
+  "assignmentOrderUsernameThenLoggedIn": true,
+  "authenticatedAssignmentsFound": true,
+  "initialDefaultLoggedInFalse": true,
+  "loggedIn": true,
+  "method": "GET",
+  "parserGuidance": "Homepage contains guest default loggedIn: false PLUS later person.loggedIn = true authenticated assignment. Parse explicit person.loggedIn assignment and person.username assignment, not generic first loggedIn occurrence.",
+  "responseContentType": "text/html;charset=utf-8",
+  "sanitization": "Only two actual assignment spans retained; username replaced with example-member. All surrounding script, member IDs, tokens, cookie values and private fields excluded.",
+  "sanitizedExactLoggedInAssignment": "person.loggedIn = true",
+  "sanitizedExactUsernameAssignment": "person.username = \"example-member\"",
+  "sanitizedUsername": "example-member",
+  "source": "Actual authenticated saved-profile homepage HTTP response HTML, not runtime assumptions",
+  "sourceURL": "https://letterboxd.com/",
+  "status": 200,
+  "usernameNonempty": true,
+  "usernamePresent": true
+}
