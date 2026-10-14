@@ -471,8 +471,8 @@ final class AccountRaceTests: XCTestCase {
         let out = try await r.value; XCTAssertNil(out)
         XCTAssertEqual(try st.load()?.username, "uu", "newer login must survive the stale restore failure")
     }
-    /// Logout is one atomic invalidate+clear: a begin/save cannot slip between them and then be erased.
-    func testLogoutIsAtomicAgainstNewLogin() async throws {
+    /// SEQUENTIAL ordering check only (login after logout persists; pre-logout token is obsolete). Does not prove atomicity under contention.
+    func testSequentialLogoutThenNewLoginAndObsoleteToken() async throws {
         let st = InMemorySessionStore(); let svc = LiveAccountService(store: st)
         try svc.signOutNow()
         _ = try await svc.complete(cookies: [AccountRaceTests.cookie], fetch: { _ in (200, AccountRaceTests.page) })
