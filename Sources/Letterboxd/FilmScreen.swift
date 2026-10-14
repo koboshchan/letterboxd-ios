@@ -13,6 +13,7 @@ struct FilmScreen: View {
                     .padding(.horizontal, -20).padding(.top, -20)
                 HStack(alignment: .bottom, spacing: 16) {
                     PosterView(film: summary).frame(width: 130)
+                        .shadow(color: .black.opacity(0.35), radius: 14, y: 6)
                     VStack(alignment: .leading, spacing: 6) {
                         Text(summary.title).font(Theme.serif(28, weight: .bold))
                         if let y = summary.year { Text(String(y)).foregroundStyle(.secondary) }
@@ -22,6 +23,7 @@ struct FilmScreen: View {
                         }
                     }
                 }
+                .padding(.top, -96).zIndex(1)   // poster rises over the hero's lower edge
                 if let d = loader?.value {
                     if let t = d.tagline { Text(t.uppercased()).font(.caption.weight(.semibold)).foregroundStyle(.secondary).tracking(1) }
                     if let s = d.synopsis { Text(s).font(.body).lineSpacing(3) }
