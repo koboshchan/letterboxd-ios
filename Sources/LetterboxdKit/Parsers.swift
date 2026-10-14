@@ -147,6 +147,33 @@ public enum Parsers {
         return Page(items: out, page: page, hasNext: !(try doc.select("a.next").isEmpty()))
     }
 
+    // MARK: film reviews
+    /// Rating from the svg aria-label of stars ("★★★½").
+    static func stars(_ s: String) -> Double? {
+        let full = s.filter { $0 == "★" }.count, half = s.contains("½") ? 0.5 : 0
+        let v = Double(full) + half; return v > 0 ? v : nil
+    }
+    public static func filmReviews(html: String, page: Int) throws -> Page<FilmReview> {
+        let doc = try SwiftSoup.parse(html, "https://letterboxd.com/")
+        var out: [FilmReview] = []
+        let df = DateFormatter(); df.locale = Locale(identifier: "en_US_POSIX"); df.dateFormat = "yyyy-MM-dd"; df.timeZone = TimeZone(identifier: "UTC")
+        for a in try doc.select("article.production-viewing") {
+            guard let ctx = try a.select("a.context").first(), let link = Validate.resolve(try ctx.attr("href")),
+                  let user = try? Validate.username(try a.select("a.avatar").first()?.attr("href").trimmingCharacters(in: CharacterSet(charactersIn: "/")) ?? ""),
+                  let body = try a.select(".js-review-body").first() else { continue }
+            let text = try body.select("p").array().map { try $0.text() }.joined(separator: "\n\n")
+            guard !text.isEmpty else { continue }
+            let name = try a.select(".displayname").first()?.text() ?? user
+            let rating = try a.select("svg.glyph.-rating").first().flatMap { stars(try $0.attr("aria-label")) }
+            let date = try a.select("time.timestamp").first().flatMap { df.date(from: try $0.attr("datetime")) }
+            var full: String? = try body.attr("data-full-text-url")
+            if let f = full, !(f.hasPrefix("/s/full-text/") && !f.contains("..") && !f.contains("?")) { full = nil }
+            if full?.isEmpty == true { full = nil }
+            out.append(FilmReview(link: link, author: name, username: user, rating: rating, text: text, date: date, fullTextPath: full))
+        }
+        return Page(items: out, page: page, hasNext: !(try doc.select("a.next").isEmpty()))
+    }
+
     // MARK: members
     static func avatar(_ raw: String?) -> URL? {
         guard let raw, let u = URL(string: raw), u.scheme == "https", u.port == nil, u.user == nil,

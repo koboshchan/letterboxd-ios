@@ -53,6 +53,14 @@ final class MockService: LetterboxdService, @unchecked Sendable {
     func personFilms(role: PersonRole, slug: String, page: Int, refresh: Bool) async throws -> Page<FilmSummary> {
         Page(items: [FilmSummary(slug: "found-film", title: "Found Film", year: 2010)], page: 1, hasNext: false)
     }
+    func filmReviews(slug: String, page: Int, refresh: Bool) async throws -> Page<FilmReview> {
+        if sc.empty { return Page(items: [], page: 1, hasNext: false) }
+        return Page(items: [FilmReview(link: URL(string: "https://letterboxd.com/rev/film/\(slug)/")!, author: "Rae Reviewer", username: "rae", rating: 4, text: "Mock review body", date: nil, fullTextPath: nil)], page: 1, hasNext: false)
+    }
+    func filmLists(slug: String, page: Int, refresh: Bool) async throws -> Page<ListSummary> {
+        if sc.empty { return Page(items: [], page: 1, hasNext: false) }
+        return Page(items: [ListSummary(title: "Film List", url: URL(string: "https://letterboxd.com/lee/list/film-list/")!, filmCount: 5, blurb: nil)], page: 1, hasNext: false)
+    }
     func personPortrait(role: PersonRole, slug: String) async -> URL? { nil }
    func following(username: String, page: Int, refresh: Bool) async throws -> Page<MemberSummary> { try network("friend", username, page) }
     func followers(username: String, page: Int, refresh: Bool) async throws -> Page<MemberSummary> { try network("fan", username, page) }

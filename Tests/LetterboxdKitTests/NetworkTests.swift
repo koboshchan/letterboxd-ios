@@ -73,4 +73,26 @@ final class NetworkTests: XCTestCase {
         XCTAssertTrue(p.hasNext)
         XCTAssertFalse(try Parsers.members(html: "<html></html>", page: 2).hasNext)
     }
+
+    func testFilmReviewsFromRealShape() throws {
+        let p = try Parsers.filmReviews(html: try fixtureText("real-review-shape", "html"), page: 1)
+        XCTAssertEqual(p.items.count, 1); XCTAssertTrue(p.hasNext)
+        let r = p.items[0]
+        XCTAssertEqual(r.username, "example-reviewer"); XCTAssertEqual(r.author, "Example Reviewer")
+        XCTAssertEqual(r.rating, 3.5); XCTAssertEqual(r.text, "Synthetic review text.")
+        XCTAssertEqual(r.link.host, "letterboxd.com"); XCTAssertEqual(r.fullTextPath, "/s/full-text/viewing:1/")
+        XCTAssertNotNil(r.date)
+    }
+    func testFilmReviewsRejectBadTextPathAndEmpty() throws {
+        let h = #"<article class="production-viewing"><a class="avatar" href="/amy/"></a><a class="context" href="/amy/film/x/"></a><div class="js-review-body" data-full-text-url="//evil.example/x"><p>hi</p></div></article><article class="production-viewing"><a class="avatar" href="/bo/"></a><a class="context" href="/bo/film/x/"></a><div class="js-review-body"></div></article>"#
+        let p = try Parsers.filmReviews(html: h, page: 1)
+        XCTAssertEqual(p.items.count, 1); XCTAssertNil(p.items[0].fullTextPath); XCTAssertNil(p.items[0].rating); XCTAssertFalse(p.hasNext)
+        XCTAssertEqual(Parsers.stars("★★★★★"), 5); XCTAssertEqual(Parsers.stars("½"), 0.5); XCTAssertNil(Parsers.stars(""))
+    }
+    func testFilmListsFromRealShape() throws {
+        let p = try Parsers.lists(html: try fixtureText("real-list-summary-shape", "html"), page: 1)
+        XCTAssertEqual(p.items.first?.title, "My Collection"); XCTAssertEqual(p.items.first?.filmCount, 2941)
+        XCTAssertTrue(p.hasNext)
+        XCTAssertFalse(p.items.contains { $0.url.host != "letterboxd.com" }, "offsite list link must not be accepted")
+    }
 }

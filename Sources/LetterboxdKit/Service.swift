@@ -13,6 +13,8 @@ public protocol LetterboxdService: Sendable {
     func searchFilms(query: String, page: Int) async throws -> Page<FilmSummary>
     func following(username: String, page: Int, refresh: Bool) async throws -> Page<MemberSummary>
     func followers(username: String, page: Int, refresh: Bool) async throws -> Page<MemberSummary>
+    func filmReviews(slug: String, page: Int, refresh: Bool) async throws -> Page<FilmReview>
+    func filmLists(slug: String, page: Int, refresh: Bool) async throws -> Page<ListSummary>
     func personFilms(role: PersonRole, slug: String, page: Int, refresh: Bool) async throws -> Page<FilmSummary>
     func personPortrait(role: PersonRole, slug: String) async -> URL?
     func poster(for slug: String) async -> URL?
@@ -71,6 +73,14 @@ public final class PublicWebService: LetterboxdService {
     public func personFilms(role: PersonRole, slug: String, page: Int, refresh: Bool) async throws -> Page<FilmSummary> {
         let s = try Validate.slug(slug)
         return try Parsers.filmGrid(html: try await fetcher.text(url([role.rawValue, s], page: page), forceRefresh: refresh), page: page)
+    }
+    public func filmReviews(slug: String, page: Int, refresh: Bool) async throws -> Page<FilmReview> {
+        let s = try Validate.slug(slug)
+        return try Parsers.filmReviews(html: try await fetcher.text(url(["film", s, "reviews"], page: page), forceRefresh: refresh), page: page)
+    }
+    public func filmLists(slug: String, page: Int, refresh: Bool) async throws -> Page<ListSummary> {
+        let s = try Validate.slug(slug)
+        return try Parsers.lists(html: try await fetcher.text(url(["film", s, "lists"], page: page), forceRefresh: refresh), page: page)
     }
     public func personPortrait(role: PersonRole, slug: String) async -> URL? {
         guard let s = try? Validate.slug(slug), let h = try? await fetcher.text(url([role.rawValue, s]), forceRefresh: false) else { return nil }

@@ -74,6 +74,13 @@ public struct Profile: Hashable, Sendable, Codable {
 }
 
 /// A diary entry or review parsed from a member RSS feed.
+/// A review of a film by any member, as listed on /film/<slug>/reviews/.
+public struct FilmReview: Hashable, Sendable, Identifiable {
+    public var id: String { link.absoluteString }
+    public let link: URL; public let author: String; public let username: String
+    public let rating: Double?; public let text: String; public let date: Date?
+    public let fullTextPath: String?
+}
 public struct ActivityEntry: Hashable, Sendable, Identifiable, Codable {
     public var id: String { link.absoluteString }
     public let link: URL
