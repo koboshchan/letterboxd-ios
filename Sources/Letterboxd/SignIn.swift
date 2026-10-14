@@ -136,7 +136,6 @@ struct SignInScreen: View {
                     .font(.caption2).foregroundStyle(.secondary).padding(8).frame(maxWidth: .infinity).background(.black)
             }
         }
-        .preferredColorScheme(.dark)
         .onAppear { account.failure = nil }
     }
     private func finish() async {

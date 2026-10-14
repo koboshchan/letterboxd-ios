@@ -25,7 +25,6 @@ targets:
         CFBundleDisplayName: Letterboxd
         UILaunchScreen: {}
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
-        UIUserInterfaceStyle: Dark
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.koboshchan.letterboxdreader
@@ -54,7 +53,6 @@ targets:
       properties:
         CFBundleDisplayName: Letterboxd UITest Host
         UILaunchScreen: {}
-        UIUserInterfaceStyle: Dark
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.koboshchan.letterboxdreader.uitesthost
