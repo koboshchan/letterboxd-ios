@@ -1,0 +1,39 @@
+name: Letterboxd
+options:
+  bundleIdPrefix: com.koboshchan
+  deploymentTarget:
+    iOS: "18.0"
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    DEVELOPMENT_TEAM: 9L8K7C9GMH
+packages:
+  LetterboxdKit:
+    path: .
+targets:
+  Letterboxd:
+    type: application
+    platform: iOS
+    sources: [Sources/Letterboxd]
+    dependencies:
+      - package: LetterboxdKit
+    info:
+      path: Sources/Letterboxd/Info.plist
+      properties:
+        CFBundleDisplayName: Letterboxd Reader
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        UIUserInterfaceStyle: Dark
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.koboshchan.letterboxdreader
+        GENERATE_INFOPLIST_FILE: NO
+  LetterboxdTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources: [Tests/LetterboxdTests]
+    dependencies:
+      - target: Letterboxd
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
