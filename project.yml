@@ -20,7 +20,7 @@ targets:
     info:
       path: Sources/Letterboxd/Info.plist
       properties:
-        CFBundleDisplayName: Letterboxd Reader
+        CFBundleDisplayName: Letterboxd
         UILaunchScreen: {}
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         UIUserInterfaceStyle: Dark
