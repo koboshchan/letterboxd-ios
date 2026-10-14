@@ -44,20 +44,3 @@ struct FilmScreen: View {
         }
     }
 }
-
-struct AboutScreen: View {
-    @Environment(AppEnvironment.self) private var env
-    var body: some View {
-        ScrollViewReader { proxy in List {
-            Section("Read-only") { Text("Browsing uses public pages only. You can sign in on letterboxd.com itself (the app does not intercept or store your password), but sign-in is not yet verified end to end, and posting, rating, watchlist and list changes are not supported.") }
-            Section("Data source") {
-                Text("Letterboxd's official API is approval-only and is not being granted for personal projects, so this app does not use it and is not an official client.")
-                Text("Diary and reviews come from each member's public RSS feed. Films, watchlist, lists and search use public web pages, fetched only when you open or refresh a screen, cached for five minutes. Challenges or blocks are never bypassed; when Letterboxd declines a request you'll see an error and a link to the website.")
-                Text("Letterboxd's terms prohibit automated gathering without authorization. Use this at your own discretion.")
-            }
-            Section("Account") { Text("Signed in as \(env.username). Sign in is required to use the app.") }
-            Section { Link("letterboxd.com", destination: URL(string: "https://letterboxd.com/")!).id("end") }
-        }.contentMargins(.bottom, 96, for: .scrollContent).scrollContentBackground(.hidden).background(Color.black).navigationTitle("About")
-        .task { if AppEnvironment.arg("-UIScrollBottom") != nil { try? await Task.sleep(nanoseconds: 800_000_000); proxy.scrollTo("end", anchor: .bottom) } } }
-    }
-}

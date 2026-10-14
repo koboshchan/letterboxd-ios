@@ -75,7 +75,6 @@ struct RootView: View {
             Tab("Profile", systemImage: "person.crop.circle", value: 0) { NavigationStack { ProfileScreen().toolbar { AccountButton() } } }
             Tab("Browse", systemImage: "film.stack", value: 1) { NavigationStack(path: $browsePath) { BrowseScreen() } }
             Tab("Search", systemImage: "magnifyingglass", value: 2, role: .search) { NavigationStack { SearchScreen() } }
-            Tab("About", systemImage: "info.circle", value: 3) { NavigationStack { AboutScreen() } }
         }
     }
 }
@@ -97,7 +96,13 @@ struct GateScreen: View {
             if let retry { Button("Try again", action: retry).buttonStyle(.bordered).tint(Theme.green) }
             if let signIn { Button(action: signIn) { Text("Sign in").font(.headline).frame(maxWidth: 280, minHeight: 44) }.buttonStyle(.borderedProminent).tint(Theme.green).foregroundStyle(.black) }
             Spacer()
+            Text(Legal.notice).font(.caption2).foregroundStyle(.secondary).multilineTextAlignment(.center).padding(.horizontal, 28).padding(.bottom, 12)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity).background(Color.black)
     }
+}
+
+enum Legal {
+    /// Disclosures kept from the former About screen; shown on the sign-in gate.
+    static let notice = "Unofficial client, not affiliated with Letterboxd and not using its API. Pages are fetched only when you open or refresh a screen and challenges or blocks are never bypassed. Letterboxd's terms prohibit automated gathering without authorization; use at your own discretion. Watchlist, list and other account changes are not supported."
 }
