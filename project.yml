@@ -14,7 +14,9 @@ targets:
   Letterboxd:
     type: application
     platform: iOS
-    sources: [Sources/Letterboxd]
+    sources:
+      - path: Sources/Letterboxd
+      - path: Resources/Letterboxd.icon
     dependencies:
       - package: LetterboxdKit
     info:
@@ -27,6 +29,7 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.koboshchan.letterboxdreader
+        ASSETCATALOG_COMPILER_APPICON_NAME: Letterboxd
         GENERATE_INFOPLIST_FILE: NO
   LetterboxdTests:
     type: bundle.unit-test
@@ -37,3 +40,39 @@ targets:
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
+  LetterboxdUITestHost:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources/Letterboxd
+        excludes: [AppMain.swift]
+      - path: Tests/UITestHost
+    dependencies:
+      - package: LetterboxdKit
+    info:
+      path: Tests/UITestHost/Info.plist
+      properties:
+        CFBundleDisplayName: Letterboxd UITest Host
+        UILaunchScreen: {}
+        UIUserInterfaceStyle: Dark
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.koboshchan.letterboxdreader.uitesthost
+        GENERATE_INFOPLIST_FILE: NO
+  LetterboxdUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [Tests/LetterboxdUITests]
+    dependencies:
+      - target: LetterboxdUITestHost
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+schemes:
+  LetterboxdUITests:
+    build:
+      targets:
+        LetterboxdUITestHost: all
+        LetterboxdUITests: [test]
+    test:
+      targets: [LetterboxdUITests]

@@ -1,21 +1,6 @@
 import SwiftUI
 import LetterboxdKit
 
-@main
-struct LetterboxdApp: App {
-    @State private var env = AppEnvironment.make()
-    @State private var account = AccountModel()
-    var body: some Scene {
-        WindowGroup {
-            RootView()
-                .environment(env)
-                .environment(account)
-                .tint(Theme.green)
-                .task { account.auth = env.auth; account.onUsernameChange = { [env] u in env.bind(username: u) }; await account.restore() }
-        }
-    }
-}
-
 enum Theme {
     static let green = Color(red: 0.0, green: 0.62, blue: 0.27)       // Letterboxd green, deepened so it reads on light and dark
     static let orange = Color.orange
