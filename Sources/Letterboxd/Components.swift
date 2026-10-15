@@ -37,16 +37,32 @@ struct PosterView: View {
                     titleCard
                 }
             }
+        .overlay(alignment: .topTrailing) { if let l = film.ownerRatingLabel { OwnerRatingBadge(text: l).padding(5) } }
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Theme.hairline))
         .shadow(color: .black.opacity(0.18), radius: 8, y: 4)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(film.year.map { "\(film.title), \($0)" } ?? film.title)
+        .accessibilityLabel((film.year.map { "\(film.title), \($0)" } ?? film.title) + (film.ownerRating.map { ", rated \($0 == $0.rounded() ? String(Int($0)) : String(format: "%.1f", $0)) stars" } ?? ""))
         .accessibilityIdentifier("poster-\(film.slug)")
         .task(id: film.slug) {
             guard film.posterURL == nil else { return }
             resolved = await PosterGate.shared.url(for: film.slug, using: env.service)
         }
+    }
+}
+
+/// Small dark glass pill with a green star; legible over any poster in light and dark appearance.
+struct OwnerRatingBadge: View {
+    let text: String
+    var body: some View {
+        HStack(spacing: 2) {
+            Image(systemName: "star.fill").font(.system(size: 8, weight: .bold)).foregroundStyle(Theme.green)
+            Text(text.dropFirst()).font(.system(size: 11, weight: .bold, design: .rounded)).foregroundStyle(.white).monospacedDigit()
+        }
+        .padding(.horizontal, 6).padding(.vertical, 3)
+        .background(.black.opacity(0.62), in: Capsule())
+        .overlay(Capsule().strokeBorder(.white.opacity(0.22), lineWidth: 0.5))
+        .accessibilityHidden(true)
     }
 }
 

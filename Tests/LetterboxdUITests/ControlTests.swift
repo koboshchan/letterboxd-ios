@@ -226,6 +226,18 @@ final class ControlTests: XCTestCase {
         app.navigationBars.buttons.firstMatch.tap(); wait(app.navigationBars["tester"])
         XCTAssertTrue(app.staticTexts["Tester Person"].exists, "root identity unchanged")
     }
+    func testProfileFilmsShowOwnerRatingsAndMemberShowsTheirOwn() {
+        let app = launch(); wait(app.navigationBars["tester"])
+        wait(poster(app, "logged-0"))
+        XCTAssertTrue(poster(app, "logged-0").label.hasSuffix("rated 4.5 stars"), poster(app, "logged-0").label)
+        XCTAssertTrue(poster(app, "logged-1").label.hasSuffix("rated 3 stars"))
+        XCTAssertFalse(poster(app, "logged-2").label.contains("rated"), "unrated has no badge")
+        app.buttons["count-following"].tap(); wait(app.navigationBars["Following"]); app.staticTexts["friend 3"].tap()
+        wait(app.navigationBars["friend-3"]); wait(poster(app, "logged-0"))
+        XCTAssertTrue(poster(app, "logged-0").label.hasSuffix("rated 2.5 stars"), "member's rating, not the viewer's")
+        XCTAssertFalse(poster(app, "logged-1").label.contains("rated"))
+        XCTAssertTrue(poster(app, "logged-2").label.hasSuffix("rated 5 stars"))
+    }
     func testFollowersListOpensAndPaginates() {
         let app = launch(); app.buttons["count-followers"].tap()
         wait(app.navigationBars["Followers"]); wait(app.staticTexts["fan 0"])

@@ -68,7 +68,7 @@ public final class PublicWebService: LetterboxdService {
     }
     public func films(username: String, page: Int, refresh: Bool) async throws -> Page<FilmSummary> {
         let u = try Validate.username(username)
-        let c = try await cached(CachedPage<FilmSummary>.self, key: "films-\(u)-\(page)", refresh: refresh) { let p = try Parsers.filmGrid(html: try await fetcher.text(url([u, "films"], page: page), forceRefresh: refresh), page: page); return CachedPage(items: p.items, page: p.page, hasNext: p.hasNext) }
+        let c = try await cached(CachedPage<FilmSummary>.self, key: "films2-\(u)-\(page)", refresh: refresh) { let p = try Parsers.filmGrid(html: try await fetcher.text(url([u, "films"], page: page), forceRefresh: refresh), page: page, ownerRatings: true); return CachedPage(items: p.items, page: p.page, hasNext: p.hasNext) }
         return Page(items: c.items, page: c.page, hasNext: c.hasNext)
     }
     public func watchlist(username: String, page: Int, refresh: Bool) async throws -> Page<FilmSummary> {

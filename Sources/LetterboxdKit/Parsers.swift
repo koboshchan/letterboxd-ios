@@ -34,7 +34,7 @@ public enum Parsers {
     static func int(_ s: String) -> Int? { Int(s.filter(\.isNumber)) }
 
     // MARK: poster grids (films, watchlist, popular)
-    public static func filmGrid(html: String, page: Int) throws -> Page<FilmSummary> {
+    public static func filmGrid(html: String, page: Int, ownerRatings: Bool = false) throws -> Page<FilmSummary> {
         let doc = try SwiftSoup.parse(html, "https://letterboxd.com/")
         var out: [FilmSummary] = []
         var seen = Set<String>()
@@ -48,10 +48,23 @@ public enum Parsers {
             if let src = try el.select("img[src]").first()?.attr("src"), src.contains("ltrbxd.com"), !src.contains("empty-poster") {
                 poster = URL(string: src)
             }
-            out.append(FilmSummary(slug: slug, title: title, year: year, posterURL: poster))
+            out.append(FilmSummary(slug: slug, title: title, year: year, posterURL: poster, ownerRating: ownerRatings ? ownerRating(in: el) : nil))
         }
         let hasNext = !(try doc.select("a.next").isEmpty())
         return Page(items: out, page: page, hasNext: hasNext)
+    }
+
+    /// Reads `rated-N` (N = half-stars, 1...10) from the owner's poster-viewingdata in the same grid cell.
+    static func ownerRating(in el: Element) -> Double? {
+        guard let cell = el.parents().first(where: { $0.tagName() == "li" }),
+              let spans = try? cell.select("p.poster-viewingdata span.rating") else { return nil }
+        for span in spans {
+            let cls = (try? span.className()) ?? ""
+            for part in cls.split(separator: " ") where part.hasPrefix("rated-") {
+                if let n = Int(part.dropFirst(6)), (1...10).contains(n) { return Double(n) / 2 }
+            }
+        }
+        return nil
     }
 
     // MARK: film detail via JSON-LD (+ og fallback)

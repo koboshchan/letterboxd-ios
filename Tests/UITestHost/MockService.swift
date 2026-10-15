@@ -17,7 +17,11 @@ final class MockService: LetterboxdService, @unchecked Sendable {
     }
     func films(username: String, page: Int, refresh: Bool) async throws -> Page<FilmSummary> {
         if sc.empty { return Page(items: [], page: 1, hasNext: false) }
-        return Page(items: films("Logged", 3), page: 1, hasNext: false)
+        var items = films("Logged", 3)
+        // Owner-specific ratings: each profile shows ITS owner's values (half star, whole star, unrated).
+        let r: [Double?] = username == "tester" ? [4.5, 3, nil] : [2.5, nil, 5]
+        for i in items.indices { items[i].ownerRating = r[i] }
+        return Page(items: items, page: 1, hasNext: false)
     }
     func watchlist(username: String, page: Int, refresh: Bool) async throws -> Page<FilmSummary> {
         if sc.empty { return Page(items: [], page: 1, hasNext: false) }

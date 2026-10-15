@@ -6,10 +6,17 @@ public struct FilmSummary: Hashable, Sendable, Identifiable, Codable {
     public let title: String
     public let year: Int?
     public var posterURL: URL?
-    public init(slug: String, title: String, year: Int?, posterURL: URL? = nil) {
-        self.slug = slug; self.title = title; self.year = year; self.posterURL = posterURL
+    /// Rating (0.5...5) given by the owner of the page this film was listed on. Never the viewer's.
+    public var ownerRating: Double?
+    public init(slug: String, title: String, year: Int?, posterURL: URL? = nil, ownerRating: Double? = nil) {
+        self.slug = slug; self.title = title; self.year = year; self.posterURL = posterURL; self.ownerRating = ownerRating
     }
     public var pageURL: URL { URL(string: "https://letterboxd.com/film/\(slug)/")! }
+    /// "★4.5" / "★4"; nil when the owner has not rated the film.
+    public var ownerRatingLabel: String? {
+        guard let r = ownerRating, r >= 0.5, r <= 5 else { return nil }
+        return "\u{2605}" + (r == r.rounded() ? String(Int(r)) : String(format: "%.1f", r))
+    }
 }
 
 public struct Person: Hashable, Sendable, Codable {
