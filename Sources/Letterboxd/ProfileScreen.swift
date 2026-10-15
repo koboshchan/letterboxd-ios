@@ -21,8 +21,8 @@ struct ProfileScreen: View {
     @State private var profile: ValueLoader<Profile>?
     @State private var films: PagedLoader<FilmSummary>?
     @State private var watch: PagedLoader<FilmSummary>?
-    @State private var diary: ValueLoader<[ActivityEntry]>?
-    @State private var reviews: ValueLoader<[ActivityEntry]>?
+    @State private var diary: PagedLoader<ActivityEntry>?
+    @State private var reviews: PagedLoader<ActivityEntry>?
     @State private var lists: PagedLoader<ListSummary>?
 
     var body: some View {
@@ -45,8 +45,8 @@ struct ProfileScreen: View {
         profile = ValueLoader { r in try await svc.profile(username: u, refresh: r) }
         films = PagedLoader { p, r in try await svc.films(username: u, page: p, refresh: r) }
         watch = PagedLoader { p, r in try await svc.watchlist(username: u, page: p, refresh: r) }
-        diary = ValueLoader { r in try await svc.diary(username: u, refresh: r) }
-        reviews = ValueLoader { r in try await svc.reviews(username: u, refresh: r) }
+        diary = PagedLoader { p, r in try await svc.diaryPage(username: u, page: p, refresh: r) }
+        reviews = PagedLoader { p, r in try await svc.reviewsPage(username: u, page: p, refresh: r) }
         lists = PagedLoader { p, r in try await svc.lists(username: u, page: p, refresh: r) }
     }
 
@@ -84,30 +84,47 @@ struct ProfileScreen: View {
         switch tab {
         case .films: if let l = films { PosterGrid(loader: l, emptyTitle: "No films yet", emptyBody: "\(shownUser) hasn't logged any films.") }
         case .watchlist: if let l = watch { PosterGrid(loader: l, emptyTitle: "Watchlist is empty", emptyBody: "Nothing on \(shownUser)'s watchlist yet.") }
-        case .diary: if let l = diary { EntryList(loader: l, emptyTitle: "Diary is empty", emptyBody: "No diary entries in the public feed. Letterboxd's RSS shows only recent entries.") }
-        case .reviews: if let l = reviews { EntryList(loader: l, emptyTitle: "No reviews", emptyBody: "No written reviews in the public feed yet.") }
+        case .diary: if let l = diary { EntryList(loader: l, groupByMonth: true, emptyTitle: "Diary is empty", emptyBody: "No logged diary entries yet.") }
+        case .reviews: if let l = reviews { EntryList(loader: l, emptyTitle: "No reviews", emptyBody: "No written reviews yet.") }
         case .lists: if let l = lists { ListsView(loader: l, canCreate: !isMember && env.account != nil) }
         }
     }
 }
 
 struct EntryList: View {
-    let loader: ValueLoader<[ActivityEntry]>
+    let loader: PagedLoader<ActivityEntry>
+    var groupByMonth = false
     let emptyTitle: String, emptyBody: String
+    private func month(_ e: ActivityEntry) -> String {
+        guard let date = e.watchedDate else { return "Undated" }
+        let df = DateFormatter(); df.dateFormat = "MMMM yyyy"; df.timeZone = TimeZone(secondsFromGMT: 0)
+        return df.string(from: date)
+    }
+    private var months: [String] {
+        loader.items.reduce(into: []) { result, e in
+            let key = month(e); if !result.contains(key) { result.append(key) }
+        }
+    }
+    private func row(_ e: ActivityEntry) -> some View {
+        NavigationLink(value: e) { EntryRow(entry: e) }
+            .task { await loader.loadMore(current: e) }
+    }
     var body: some View {
         List {
-            if let items = loader.value {
-                if items.isEmpty { EmptyCard(symbol: "book.closed", title: emptyTitle, text: emptyBody).listRowBackground(Color.clear) }
-                ForEach(items) { e in
-                    NavigationLink(value: e) { EntryRow(entry: e) }
+            if loader.isEmptyLoaded { EmptyCard(symbol: "book.closed", title: emptyTitle, text: emptyBody).listRowBackground(Color.clear) }
+            if groupByMonth {
+                ForEach(months, id: \.self) { key in
+                    Section(key) { ForEach(loader.items.filter { month($0) == key }) { e in row(e) } }
                 }
+            } else {
+                ForEach(loader.items) { e in row(e) }
             }
-            if let e = loader.error { ErrorCard(error: e, retry: { Task { await loader.load(refresh: true) } }).listRowBackground(Color.clear).listRowSeparator(.hidden) }
-            if loader.isLoading && loader.value == nil { HStack { Spacer(); ProgressView(); Spacer() }.listRowBackground(Color.clear) }
+            if let e = loader.error { ErrorCard(error: e, retry: { Task { await loader.loadFirst(refresh: true) } }).listRowBackground(Color.clear).listRowSeparator(.hidden) }
+            if loader.isLoading { HStack { Spacer(); ProgressView(); Spacer() }.listRowBackground(Color.clear) }
         }
         .listStyle(.plain)
-        .refreshable { await loader.load(refresh: true) }
-        .task { await loader.load() }
+        .refreshable { await loader.loadFirst(refresh: true) }
+        .task { await loader.loadFirst() }
     }
 }
 

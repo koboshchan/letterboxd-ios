@@ -127,8 +127,8 @@ final class KitTests: XCTestCase {
         let svc = PublicWebService(fetcher: Fetcher(transport: StubTransport { _ in HTTPResult(data: Data(), status: 200) }))
         do { _ = try await svc.searchFilms(query: "a/b", page: 1); XCTFail() } catch { XCTAssertEqual(error as? LetterboxdError, .invalidInput("query")) }
     }
-    func testDiaryFiltersToWatchedEntries() async throws {
-        let svc = PublicWebService(fetcher: Fetcher(transport: StubTransport { _ in HTTPResult(data: try fixture("rss", "xml"), status: 200) }))
+    func testDiaryAndReviewsUseTheirOwnHTMLPages() async throws {
+        let svc = PublicWebService(fetcher: Fetcher(transport: StubTransport { u in HTTPResult(data: try fixture(u.path.contains("/diary/") ? "member-diary" : "member-reviews", "html"), status: 200) }))
         let d = try await svc.diary(username: "example-member", refresh: false); XCTAssertEqual(d.count, 2)
         let r = try await svc.reviews(username: "example-member", refresh: false); XCTAssertEqual(r.count, 1)
     }

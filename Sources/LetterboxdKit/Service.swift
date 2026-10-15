@@ -7,6 +7,8 @@ public protocol LetterboxdService: Sendable {
     func watchlist(username: String, page: Int, refresh: Bool) async throws -> Page<FilmSummary>
     func diary(username: String, refresh: Bool) async throws -> [ActivityEntry]
     func reviews(username: String, refresh: Bool) async throws -> [ActivityEntry]
+    func diaryPage(username: String, page: Int, refresh: Bool) async throws -> Page<ActivityEntry>
+    func reviewsPage(username: String, page: Int, refresh: Bool) async throws -> Page<ActivityEntry>
     func lists(username: String, page: Int, refresh: Bool) async throws -> Page<ListSummary>
     func browse(_ kind: BrowseKind, page: Int, refresh: Bool) async throws -> Page<FilmSummary>
     func film(slug: String, refresh: Bool) async throws -> FilmDetail
@@ -23,7 +25,16 @@ public protocol LetterboxdService: Sendable {
     func poster(for slug: String) async -> URL?
 }
 
-/// Live adapter: public RSS for diary/reviews, public HTML for the rest. GET only, no login,
+extension LetterboxdService {
+    public func diaryPage(username: String, page: Int, refresh: Bool) async throws -> Page<ActivityEntry> {
+        Page(items: page == 1 ? try await diary(username: username, refresh: refresh) : [], page: page, hasNext: false)
+    }
+    public func reviewsPage(username: String, page: Int, refresh: Bool) async throws -> Page<ActivityEntry> {
+        Page(items: page == 1 ? try await reviews(username: username, refresh: refresh) : [], page: page, hasNext: false)
+    }
+}
+
+/// Live adapter: separate paginated public HTML diary and review sources. GET only, no login,
 /// no background crawling, no challenge bypass. Letterboxd's official API is approval-only
 /// and is NOT used here.
 public final class PublicWebService: LetterboxdService {
@@ -77,11 +88,18 @@ public final class PublicWebService: LetterboxdService {
         return Page(items: c.items, page: c.page, hasNext: c.hasNext)
     }
     public func diary(username: String, refresh: Bool) async throws -> [ActivityEntry] {
-        let u = try Validate.username(username)
-        return try RSSParser.parse(Data(try await fetcher.text(url([u, "rss"]), accept: "application/rss+xml", forceRefresh: refresh).utf8)).filter { $0.watchedDate != nil && !$0.isListEntry }
+        try await diaryPage(username: username, page: 1, refresh: refresh).items
     }
     public func reviews(username: String, refresh: Bool) async throws -> [ActivityEntry] {
-        try await diary(username: username, refresh: refresh).filter { ($0.review ?? "").isEmpty == false }
+        try await reviewsPage(username: username, page: 1, refresh: refresh).items
+    }
+    public func diaryPage(username: String, page: Int, refresh: Bool) async throws -> Page<ActivityEntry> {
+        let u = try Validate.username(username)
+        return try Parsers.memberDiary(html: try await fetcher.text(url([u, "diary", "films"], page: page), forceRefresh: refresh), page: page)
+    }
+    public func reviewsPage(username: String, page: Int, refresh: Bool) async throws -> Page<ActivityEntry> {
+        let u = try Validate.username(username)
+        return try Parsers.memberReviews(html: try await fetcher.text(url([u, "reviews", "films"], page: page), forceRefresh: refresh), page: page)
     }
     public func lists(username: String, page: Int, refresh: Bool) async throws -> Page<ListSummary> {
         let u = try Validate.username(username)
