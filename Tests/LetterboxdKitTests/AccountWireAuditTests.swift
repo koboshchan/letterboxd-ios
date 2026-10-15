@@ -108,13 +108,22 @@ final class AccountWireAuditTests: XCTestCase {
             let count = await wire.requests.count; XCTAssertEqual(count, 0)
         }
     }
-    func testOnlyCapturedBioEditsArePermitted() async throws {
-        let wire = AuditWire(pages: [auditSettings()], response: result("{}"))
+    func testAllEditableProfileFieldsPostAndConfirmWithoutChangingOtherSettings() async throws {
+        var changed = fields
+        changed.givenName = "New & Name"; changed.location = "Vancouver"; changed.website = "https://example.com/"
+        let after = auditSettings(bio: "after")
+            .replacingOccurrences(of: "value=\"Fixture\"", with: "value=\"New &amp; Name\"")
+            .replacingOccurrences(of: "name=\"location\" value=\"\"", with: "name=\"location\" value=\"Vancouver\"")
+            .replacingOccurrences(of: "name=\"website\" value=\"\"", with: "name=\"website\" value=\"https://example.com/\"")
+        let wire = AuditWire(pages: [auditSettings(), after], response: result(#"{"result":true,"errorFields":[]}"#))
         let client = AccountActions(transport: AuditTransport(wire: wire), auth: auth())
-        var changed = fields; changed.givenName = "Changed"
-        do { _ = try await client.saveProfile(changed); XCTFail() }
-        catch { XCTAssertEqual(error as? LetterboxdError, .invalidInput("Only bio edits are verified")) }
-        let count = await wire.requests.count; XCTAssertEqual(count, 0)
+        let confirmed = try await client.saveProfile(changed)
+        XCTAssertEqual(confirmed, changed)
+        let request = await wire.requests[0]
+        let body = String(decoding: request.body, as: UTF8.self)
+        XCTAssertTrue(body.contains("givenName=New+%26+Name&familyName="))
+        XCTAssertTrue(body.contains("location=Vancouver&website=https%3A%2F%2Fexample.com%2F"))
+        XCTAssertTrue(body.contains("emailAddress=fixture%40example.com"))
     }
     func testConcurrentProfileDraftChangeBlocksBeforePOST() async throws {
         let wire = AuditWire(pages: [auditSettings(bio: "changed elsewhere")], response: result("{}"))

@@ -113,7 +113,7 @@ public struct SettingsForm: Sendable, Equatable {
         }
         return o
     }
-    /// The POST body: every successful control as served; production saves restrict changes to bio.
+    /// The POST body: every successful control as served; only the five profile fields can change.
     func body(applying f: ProfileFields) -> Data {
         let pairs = controls.map { c -> (String, String) in ProfileFields.names.contains(c.name) ? (c.name, f.value(c.name)) : (c.name, c.value) }
         return Data(pairs.map { Self.encode($0.0) + "=" + Self.encode($0.1) }.joined(separator: "&").utf8)
@@ -154,10 +154,6 @@ public final class AccountActions: Sendable {
             try Task.checkCancellation()
             let before = try await settings(c)
             if let original, before.fields != original { throw LetterboxdError.parse("profile changed elsewhere; reload") }
-            guard f.givenName == before.fields.givenName, f.familyName == before.fields.familyName,
-                  f.location == before.fields.location, f.website == before.fields.website else {
-                throw LetterboxdError.invalidInput("Only bio edits are verified")
-            }
             guard auth.generation == c.generation else { throw LetterboxdError.cancelled }
             let want = ProfileFields(givenName: f.givenName, familyName: f.familyName, location: f.location, website: f.website, bio: ProfileFields.norm(f.bio))
             let req = WriteRequest(method: "POST", url: URL(string: "https://letterboxd.com/user/update.do")!,

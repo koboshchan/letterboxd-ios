@@ -76,7 +76,7 @@ struct EditProfileScreen: View {
             if let m = model { content(m) } else { ProgressView() }
         }
         .navigationTitle("Edit Profile").navigationBarTitleDisplayMode(.inline)
-        .hidesBottomNav()
+
         .task {
             if model == nil { model = EditProfileModel(client: env.account, auth: env.auth, invalidate: { [env] in await env.invalidateReads() }) }
             await model?.load()
@@ -94,9 +94,25 @@ struct EditProfileScreen: View {
         case .ready:
             Form {
                 Section("Profile") {
-                    LabeledContent("Name", value: [m.fields.givenName, m.fields.familyName].filter { !$0.isEmpty }.joined(separator: " "))
-                    LabeledContent("Location", value: m.fields.location.isEmpty ? "Not set" : m.fields.location)
-                    LabeledContent("Website", value: m.fields.website.isEmpty ? "Not set" : m.fields.website)
+                    LabeledContent("Name") {
+                        TextField("Name", text: $m.fields.givenName)
+                            .multilineTextAlignment(.trailing).accessibilityIdentifier("profile-given-name")
+                    }
+                    if !m.fields.familyName.isEmpty {
+                        LabeledContent("Last Name") {
+                            TextField("Last Name", text: $m.fields.familyName)
+                                .multilineTextAlignment(.trailing).accessibilityIdentifier("profile-family-name")
+                        }
+                    }
+                    LabeledContent("Location") {
+                        TextField("Not set", text: $m.fields.location)
+                            .multilineTextAlignment(.trailing).accessibilityIdentifier("profile-location")
+                    }
+                    LabeledContent("Website") {
+                        TextField("Not set", text: $m.fields.website)
+                            .keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
+                            .multilineTextAlignment(.trailing).accessibilityIdentifier("profile-website")
+                    }
                 }
                 Section("Bio") {
                     TextField("Bio", text: $m.fields.bio, axis: .vertical).lineLimit(3...8).accessibilityIdentifier("profile-bio")
@@ -109,7 +125,7 @@ struct EditProfileScreen: View {
                     if m.notice != .none {
                         Button("Reload") { Task { m.reload(); await m.load() } }.accessibilityIdentifier("profile-reload")
                     }
-                } footer: { Text("Only your bio can be edited here. Other profile fields and settings stay as they are.") }
+                } footer: { Text("Your profile changes are confirmed with Letterboxd before showing as saved. Other settings stay as they are.") }
             }
             .scrollDismissesKeyboard(.interactively)
             .disabled(m.saving)

@@ -12,8 +12,14 @@ final class AccountWriteTests: XCTestCase {
         let bio = app.textFields["profile-bio"].exists ? app.textFields["profile-bio"] : app.textViews["profile-bio"]
         XCTAssertTrue(bio.waitForExistence(timeout: 8))
         XCTAssertFalse(app.buttons["profile-save"].isEnabled, "nothing changed yet")
-        XCTAssertFalse(app.textFields["profile-given-name"].exists)
-        XCTAssertFalse(app.textFields["profile-location"].exists)
+        XCTAssertTrue(app.buttons["tab-Browse"].exists, "profile editor retains bottom nav")
+        XCTAssertEqual(app.textFields["profile-given-name"].value as? String, "Tester")
+        for (id, input) in [("profile-given-name", " Name"), ("profile-location", "Vancouver"), ("profile-website", "https://example.com")] {
+            let field = app.textFields[id]
+            XCTAssertTrue(field.waitForExistence(timeout: 5))
+            field.tap(); field.typeText(input)
+            XCTAssertTrue((field.value as? String)?.contains(input) == true)
+        }
         bio.tap(); bio.typeText(" more")
         XCTAssertTrue(app.buttons["profile-save"].isEnabled)
         app.buttons["profile-save"].tap()

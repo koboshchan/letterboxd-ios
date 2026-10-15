@@ -13,6 +13,7 @@ struct FilmScreen: View {
                     .background(alignment: .top) {
                         BackdropHero(url: loader?.value?.backdropURL, loading: loader?.value == nil && loader?.error == nil)
                     }
+                VStack(alignment: .leading, spacing: 18) {
                 HStack(alignment: .bottom, spacing: 16) {
                     PosterView(film: summary).frame(width: 130)
                         .shadow(color: .black.opacity(0.35), radius: 14, y: 6)
@@ -40,13 +41,14 @@ struct FilmScreen: View {
                 } else if let e = loader?.error {
                     ErrorCard(error: e, retry: { Task { await loader?.load(refresh: true) } }, link: summary.pageURL)
                 } else { ProgressView().frame(maxWidth: .infinity).padding() }
-                NavigationLink { FilmReviewsScreen(film: summary).hidesBottomNav() } label: { Label("Reviews", systemImage: "text.bubble") }.buttonStyle(.bordered)
-                NavigationLink { FilmListsScreen(film: summary).hidesBottomNav() } label: { Label("Lists featuring this film", systemImage: "list.bullet.rectangle") }.buttonStyle(.bordered)
-            }.padding(20)
+                NavigationLink { FilmReviewsScreen(film: summary) } label: { Label("Reviews", systemImage: "text.bubble") }.buttonStyle(.bordered)
+                NavigationLink { FilmListsScreen(film: summary) } label: { Label("Lists featuring this film", systemImage: "list.bullet.rectangle") }.buttonStyle(.bordered)
+                }.padding(.horizontal, 20).padding(.bottom, 76)
+            }.frame(maxWidth: .infinity)
         }
         .ignoresSafeArea(edges: .top)
         .navigationBarBackButtonHidden(true)
-        .hidesBottomNav()
+
         .enableInteractivePop()
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
@@ -86,7 +88,11 @@ struct BackdropHero: View {
             .frame(height: 300)
             .overlay {
                 if let url {
-                    CachedImage(url: url) { Color.clear }
+                    GeometryReader { geometry in
+                        CachedImage(url: url) { Color.clear }
+                            .frame(width: geometry.size.width, height: geometry.size.height)
+                            .clipped()
+                    }
                 } else if loading { ProgressView() }
             }
             .clipped()

@@ -33,8 +33,6 @@ final class AppEnvironment {
         if models.count >= 200 { models = [:] }
         let m = FilmActionsModel(client: actions, auth: auth, slug: slug); m.onConfirmed = { [service] in await (service as? PublicWebService)?.invalidateReads() }; models[slug] = m; return m
     }
-    /// Number of pushed screens (film detail and its children) that want the bottom nav hidden; nav shows only at 0.
-    var bottomNavHiders = 0
     /// Member being viewed; set only from a server-validated session (empty while signed out, never shown then).
     private(set) var username = ""
     /// The only writer: bound to the validated session (see AccountModel.onUsernameChange). No manual override exists.
@@ -97,7 +95,7 @@ struct RootView: View {
             Tab("Search", systemImage: "magnifyingglass", value: 2) { NavigationStack { SearchScreen().sharedDestinations() }.toolbarVisibility(.hidden, for: .tabBar) }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            if env.bottomNavHiders == 0 { BottomNav(selection: $selection).transition(.opacity) }
+            BottomNav(selection: $selection)
         }
     }
 }
@@ -150,17 +148,6 @@ extension View {
     @ViewBuilder func glassSurface<S: Shape>(_ s: S) -> some View {
         if #available(iOS 26, *) { glassEffect(.regular.interactive(), in: s) } else { background(.ultraThinMaterial, in: s) }
     }
-    /// Hides the bottom nav while this screen is on screen (restored on pop, button or edge swipe).
-    func hidesBottomNav() -> some View { modifier(HideBottomNav()) }
-}
-private struct HideBottomNav: ViewModifier {
-    @Environment(AppEnvironment.self) private var env
-    @State private var counted = false
-    func body(content: Content) -> some View {
-        content
-            .onAppear { if !counted { counted = true; env.bottomNavHiders += 1 } }
-            .onDisappear { if counted { counted = false; env.bottomNavHiders -= 1 } }
-    }
 }
 
 /// Full-screen state shown instead of any app content while signed out, validating, or when validation failed.
@@ -195,7 +182,7 @@ struct GateScreen: View {
 
 enum Legal {
     /// Disclosures kept from the former About screen; shown on the sign-in gate.
-    static let notice = "Unofficial client, not affiliated with Letterboxd and not using its API. Pages are fetched only when you open or refresh a screen and challenges or blocks are never bypassed. Letterboxd's terms prohibit automated gathering without authorization; use at your own discretion. Watchlist, like, watched, rating, bio editing and new private lists are supported; diary entries, reviews and adding films to lists are not."
+    static let notice = "Unofficial client, not affiliated with Letterboxd and not using its API. Pages are fetched only when you open or refresh a screen and challenges or blocks are never bypassed. Letterboxd's terms prohibit automated gathering without authorization; use at your own discretion. Watchlist, like, watched, rating, profile editing and new private lists are supported; diary entries, reviews and adding films to lists are not."
 }
 
 

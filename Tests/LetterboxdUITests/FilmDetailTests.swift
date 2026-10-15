@@ -13,6 +13,20 @@ final class FilmDetailTests: XCTestCase {
         return app
     }
 
+    func testBackdropFillsScreenWidthAndTop() {
+        let app = open()
+        let backdrop = app.otherElements["film-backdrop"].firstMatch
+        XCTAssertTrue(backdrop.waitForExistence(timeout: 5))
+        let screen = app.windows.firstMatch.frame
+        XCTAssertEqual(backdrop.frame.minX, screen.minX, accuracy: 1)
+        XCTAssertEqual(backdrop.frame.width, screen.width, accuracy: 1)
+        XCTAssertLessThanOrEqual(backdrop.frame.minY, screen.minY + 1)
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = "Full-width film backdrop"
+        shot.lifetime = .keepAlways
+        add(shot)
+    }
+
     func testBackdropScrollsAwayWithContent() {
         let app = open()
         let b = app.otherElements["film-backdrop"].firstMatch
@@ -23,13 +37,13 @@ final class FilmDetailTests: XCTestCase {
         XCTAssertFalse(b.isHittable && b.frame.maxY > 120, "backdrop should have scrolled off the top")
     }
 
-    func testTabBarHiddenOnDetailAndRestoredOnPop() {
+    func testTabBarVisibleOnDetailNestedRoutesAndPop() {
         let app = open()
-        XCTAssertFalse(app.buttons["tab-Browse"].exists, "nav hidden on film detail"); XCTAssertFalse(app.buttons["tab-Search"].exists)
+        XCTAssertTrue(app.buttons["tab-Browse"].isHittable); XCTAssertTrue(app.buttons["tab-Search"].isHittable)
         app.buttons["Lists featuring this film"].firstMatch.tap()
-        XCTAssertFalse(app.buttons["tab-Browse"].exists, "still hidden on nested route")
+        XCTAssertTrue(app.buttons["tab-Browse"].isHittable, "visible on nested route")
         app.navigationBars.buttons.firstMatch.tap()
-        XCTAssertFalse(app.buttons["tab-Browse"].exists, "hidden after popping to film")
+        XCTAssertTrue(app.buttons["tab-Browse"].isHittable, "visible after popping to film")
         app.navigationBars.buttons["Back"].firstMatch.tap()
         XCTAssertTrue(app.buttons["tab-Browse"].waitForExistence(timeout: 5), "tab bar restored on pop")
     }
@@ -103,13 +117,13 @@ final class FilmDetailTests: XCTestCase {
         XCTAssertFalse(app.staticTexts["Synopsis for logged-1"].exists)
     }
 
-    func testBottomReachableWithoutTabBarGap() {
+    func testBottomReachableAbovePersistentTabBar() {
         let app = open()
         for _ in 0..<6 { app.swipeUp() }
         let last = app.buttons["Lists featuring this film"].firstMatch
         XCTAssertTrue(last.isHittable)
         let h = app.windows.firstMatch.frame.height
-        XCTAssertGreaterThan(last.frame.maxY, h - 140, "no leftover floating-bar gap")
-        XCTAssertLessThan(last.frame.maxY, h - 10)
+        XCTAssertGreaterThan(last.frame.maxY, h - 230)
+        XCTAssertLessThanOrEqual(last.frame.maxY, app.buttons["tab-Browse"].frame.minY, "content stays above the persistent nav")
     }
 }
