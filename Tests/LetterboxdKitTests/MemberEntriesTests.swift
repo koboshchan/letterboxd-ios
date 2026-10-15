@@ -40,6 +40,32 @@ final class MemberEntriesTests: XCTestCase {
         XCTAssertEqual(d.items.count, 2); XCTAssertEqual(r.items.count, 1)
         XCTAssertEqual(d.page, 2); XCTAssertEqual(r.page, 2)
     }
+    func testLazyPosterAndCanonicalSlugFallback() throws {
+        let html = try fixtureText("member-reviews", "html")
+        let lazy = html.replacingOccurrences(of: "<img src=", with: "<img data-src=\"https://a.ltrbxd.com/real-poster.jpg\" src=")
+        let entry = try XCTUnwrap(Parsers.memberReviews(html: lazy, page: 1).items.first)
+        XCTAssertEqual(entry.posterURL?.absoluteString, "https://a.ltrbxd.com/real-poster.jpg")
+        XCTAssertEqual(entry.filmSlug, "example-film")
+        let missing = try Parsers.memberReviews(html: html, page: 1).items[0]
+        XCTAssertNil(missing.posterURL)
+        XCTAssertEqual(missing.filmSlug, "example-film")
+        let diary = try Parsers.memberDiary(html: fixtureText("member-diary", "html"), page: 1)
+        XCTAssertEqual(diary.items.map(\.filmSlug), ["example-film", "example-film"])
+        let hostile = ActivityEntry(link: URL(string: "https://evil.example/tester/film/example/")!, filmTitle: "X", filmYear: nil, rating: nil, watchedDate: nil, rewatch: false, review: nil, posterURL: nil)
+        XCTAssertNil(hostile.filmSlug)
+    }
+    func testPersonDetailsSanitizedFixture() {
+        let details = Parsers.personDetails(html: """
+        <img class="js-tmdb-person" data-image="https://image.tmdb.org/t/p/w500/example.jpg">
+        <div id="content-nav"><ul class="smenu-menu"><li class="smenu-subselected"><span>Actor <small>1,234</small></span></li><li><a>Producer <small>2</small></a></li></ul></div>
+        <div class="js-tmdb-bio"><p>Example biography.</p><p>Second paragraph.</p></div>
+        """)
+        XCTAssertEqual(details.filmCount, 1234)
+        XCTAssertEqual(details.roles, ["Actor", "Producer"])
+        XCTAssertEqual(details.biography, "Example biography.\n\nSecond paragraph.")
+        XCTAssertEqual(details.portraitURL?.host, "image.tmdb.org")
+        XCTAssertNil(Parsers.personDetails(html: "<html></html>").biography)
+    }
     func testEmptyAndHostileLinks() throws {
         XCTAssertTrue(try Parsers.memberDiary(html: "<table></table>", page: 1).items.isEmpty)
         XCTAssertTrue(try Parsers.memberReviews(html: "<html></html>", page: 1).items.isEmpty)

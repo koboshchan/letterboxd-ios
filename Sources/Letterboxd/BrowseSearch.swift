@@ -3,6 +3,7 @@ import LetterboxdKit
 
 struct BrowseScreen: View {
     @Environment(AppEnvironment.self) private var env
+    @State private var pagingForward = true
     @State private var kind: BrowseKind = .popular
     @State private var store = BrowseStore()
     var body: some View {
@@ -11,7 +12,22 @@ struct BrowseScreen: View {
                 .pickerStyle(.segmented).padding(16)
             PosterGrid(loader: loader(kind), emptyTitle: "Nothing here", emptyBody: "Letterboxd returned no films for this list.")
                 .id(kind)
+                .transition(.asymmetric(insertion: .move(edge: pagingForward ? .trailing : .leading), removal: .move(edge: pagingForward ? .leading : .trailing)))
+                .contentShape(Rectangle())
+                .simultaneousGesture(DragGesture(minimumDistance: 24)
+                    .onEnded { value in
+                        guard value.startLocation.x > 32,
+                              abs(value.translation.width) > 60,
+                              abs(value.translation.width) > abs(value.translation.height) * 1.5,
+                              let index = BrowseKind.allCases.firstIndex(of: kind) else { return }
+                        let next = index + (value.translation.width < 0 ? 1 : -1)
+                        guard BrowseKind.allCases.indices.contains(next) else { return }
+                        pagingForward = next > index
+                        withAnimation(.easeInOut(duration: 0.22)) { kind = BrowseKind.allCases[next] }
+                    })
+                .animation(.easeInOut(duration: 0.22), value: kind)
         }
+        .clipped()
         .navigationTitle("Browse")
     }
     private func loader(_ k: BrowseKind) -> PagedLoader<FilmSummary> { store.loader(k, service: env.service) }

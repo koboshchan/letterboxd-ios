@@ -84,31 +84,107 @@ struct FlowLayout: Layout {
     }
 }
 
-/// Read-only filmography for a cast or crew member. Never touches the signed-in identity.
+/// Shelf-style read-only person detail with a single, continuous filmography scroll.
 struct PersonScreen: View {
     @Environment(AppEnvironment.self) private var env
     let credit: Credit
     @State private var loader: PagedLoader<FilmSummary>?
-    @State private var portrait: URL?
+    @State private var details: PersonDetails?
+    private let columns = [GridItem(.adaptive(minimum: 104), spacing: 10)]
     var body: some View {
-        Group {
-            if let loader {
-                VStack(spacing: 0) {
-                    if let portrait {
-                        CachedImage(url: portrait) { Color.secondary.opacity(0.15) }
-                            .frame(width: 96, height: 128).clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                            .padding(.top, 8).accessibilityLabel(credit.name)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                HStack(alignment: .bottom, spacing: 16) {
+                    CachedImage(url: details?.portraitURL) {
+                        ZStack { Theme.card; Image(systemName: "person.fill").font(.largeTitle).foregroundStyle(.secondary) }
                     }
-                PosterGrid(loader: loader, emptyTitle: "No films", emptyBody: "Letterboxd lists no films for \(credit.name).")
+                    .frame(width: 112, height: 160)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .accessibilityLabel(credit.name)
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(credit.name).font(Theme.serif(26)).lineLimit(3)
+                        Text(credit.role.rawValue.capitalized).font(.subheadline).foregroundStyle(.secondary)
+                        if let count = details?.filmCount {
+                            Text("\(count) films").font(.footnote).foregroundStyle(.secondary)
+                        }
+                    }
                 }
-            } else { ProgressView() }
+                if let roles = details?.roles, !roles.isEmpty {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(roles, id: \.self) { role in
+                                Text(role).font(.footnote).padding(.horizontal, 12).padding(.vertical, 6)
+                                    .background(Theme.green.opacity(0.12), in: Capsule())
+                            }
+                        }
+                    }
+                }
+                if let bio = details?.biography, !bio.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("About").font(Theme.serif(22))
+                        PersonBiography(text: bio)
+                    }
+                }
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Films").font(Theme.serif(22)).accessibilityAddTraits(.isHeader)
+                    if let loader {
+                        LazyVGrid(columns: columns, spacing: 12) {
+                            ForEach(loader.items) { film in
+                                NavigationLink(value: film) { PosterView(film: film) }
+                                    .buttonStyle(.plain).filmContextMenu(film)
+                                    .task { await loader.loadMore(current: film) }
+                            }
+                        }
+                        if loader.isLoading { ProgressView().frame(maxWidth: .infinity).padding() }
+                        if let error = loader.error {
+                            ErrorCard(error: error, retry: { Task { await loader.loadFirst(refresh: true) } })
+                        }
+                        if loader.isEmptyLoaded {
+                            EmptyCard(symbol: "film", title: "No films", text: "Letterboxd lists no films for \(credit.name).")
+                        }
+                    }
+                }
+            }.padding(20)
         }
         .navigationTitle(credit.name).navigationBarTitleDisplayMode(.inline)
-        .task {
+        .navigationDestination(for: FilmSummary.self) { FilmScreen(summary: $0) }
+        .refreshable { await loader?.loadFirst(refresh: true) }
+        .task(id: credit.id) {
             guard loader == nil else { return }
-            let s = env.service, r = credit.role, slug = credit.slug
-            Task { portrait = await s.personPortrait(role: r, slug: slug) }
-            loader = PagedLoader { p, refresh in try await s.personFilms(role: r, slug: slug, page: p, refresh: refresh) }
+            let service = env.service, role = credit.role, slug = credit.slug
+            let films = PagedLoader { p, refresh in try await service.personFilms(role: role, slug: slug, page: p, refresh: refresh) }
+            loader = films
+            async let info = service.personDetails(role: role, slug: slug)
+            await films.loadFirst()
+            details = await info
+        }
+    }
+}
+
+/// Measures both layouts at the actual Dynamic Type size; More is never shown for short biographies.
+struct PersonBiography: View {
+    let text: String
+    @State private var expanded = false
+    @State private var fullHeight: CGFloat = 0
+    @State private var collapsedHeight: CGFloat = 0
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(text).font(.subheadline).foregroundStyle(.secondary)
+                .lineLimit(expanded ? nil : 5)
+                .background {
+                    Text(text).font(.subheadline).lineLimit(5)
+                        .background(GeometryReader { proxy in Color.clear.onAppear { collapsedHeight = proxy.size.height }.onChange(of: proxy.size.height) { _, h in collapsedHeight = h } })
+                        .hidden()
+                }
+                .overlay(alignment: .topLeading) {
+                    Text(text).font(.subheadline).fixedSize(horizontal: false, vertical: true)
+                        .background(GeometryReader { proxy in Color.clear.onAppear { fullHeight = proxy.size.height }.onChange(of: proxy.size.height) { _, h in fullHeight = h } })
+                        .hidden().allowsHitTesting(false)
+                }
+            if fullHeight > collapsedHeight + 1 {
+                Button(expanded ? "Less" : "More") { withAnimation { expanded.toggle() } }
+                    .font(.subheadline.weight(.medium)).tint(Theme.green)
+            }
         }
     }
 }

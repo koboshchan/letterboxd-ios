@@ -92,6 +92,11 @@ public struct FilmReview: Hashable, Sendable, Identifiable {
     }
 }
 public struct ActivityEntry: Hashable, Sendable, Identifiable, Codable {
+    /// Review links retain the canonical film slug, including repeated viewings.
+    public var filmSlug: String? {
+        guard !isListEntry, let page = try? Validate.reviewPage(link) else { return nil }
+        return page.path.split(separator: "/").dropFirst(2).first.map(String.init)
+    }
     public var id: String { link.absoluteString }
     public let link: URL
     public let filmTitle: String
@@ -131,4 +136,15 @@ public struct MemberSummary: Hashable, Sendable, Identifiable, Codable {
 
 public enum BrowseKind: String, CaseIterable, Sendable { case popular, topRated, anticipated
     public var title: String { switch self { case .popular: "Popular"; case .topRated: "Top Rated"; case .anticipated: "Anticipated" } }
+}
+
+
+public struct PersonDetails: Sendable {
+    public let portraitURL: URL?
+    public let biography: String?
+    public let filmCount: Int?
+    public let roles: [String]
+    public init(portraitURL: URL? = nil, biography: String? = nil, filmCount: Int? = nil, roles: [String] = []) {
+        self.portraitURL = portraitURL; self.biography = biography; self.filmCount = filmCount; self.roles = roles
+    }
 }

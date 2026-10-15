@@ -90,6 +90,52 @@ final class ControlTests: XCTestCase {
         seg.buttons["Lists"].tap(); wait(app.staticTexts["Mock List"])
         seg.buttons["Films"].tap(); wait(poster(app, "logged-0"))
     }
+    func testBrowseContentSwipesKeepSegmentsInSync() {
+        let app = launch()
+        tab(app, "Browse")
+        wait(poster(app, "popular-0"))
+        let section = app.segmentedControls.firstMatch
+        func swipe(_ left: Bool) {
+            app.coordinate(withNormalizedOffset: CGVector(dx: left ? 0.8 : 0.2, dy: 0.65))
+                .press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: left ? 0.2 : 0.8, dy: 0.65)))
+        }
+        swipe(true)
+        XCTAssertTrue(section.buttons.element(boundBy: 1).isSelected)
+        swipe(true)
+        XCTAssertTrue(section.buttons.element(boundBy: 2).isSelected)
+        swipe(false)
+        XCTAssertTrue(section.buttons.element(boundBy: 1).isSelected)
+        app.swipeUp()
+        XCTAssertTrue(section.buttons.element(boundBy: 1).isSelected)
+        swipe(false)
+        XCTAssertTrue(section.buttons.element(boundBy: 0).isSelected)
+    }
+    func testProfileContentSwipesKeepSegmentsInSync() {
+        let app = launch()
+        wait(poster(app, "logged-0"))
+        let section = app.segmentedControls.firstMatch
+        func swipe(_ left: Bool) {
+            app.coordinate(withNormalizedOffset: CGVector(dx: left ? 0.8 : 0.2, dy: 0.65))
+                .press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: left ? 0.2 : 0.8, dy: 0.65)))
+        }
+        for name in ["Diary", "Reviews", "Watchlist", "Lists"] {
+            swipe(true)
+            XCTAssertTrue(section.buttons[name].isSelected)
+        }
+        swipe(false)
+        XCTAssertTrue(section.buttons["Watchlist"].isSelected)
+        section.buttons["Films"].tap()
+        app.buttons["count-followers"].tap()
+        wait(app.staticTexts["fan 1"]); app.staticTexts["fan 1"].tap()
+        wait(app.navigationBars["fan-1"])
+        swipe(true)
+        XCTAssertTrue(section.buttons["Diary"].isSelected)
+        swipe(false)
+        XCTAssertTrue(section.buttons["Films"].isSelected)
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.005, dy: 0.6))
+            .press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.6)))
+        wait(app.navigationBars["Followers"])
+    }
     func testProfileFilmOpensDetailAndBackReturns() {
         let app = launch()
         poster(app, "logged-1").tap()
@@ -267,6 +313,15 @@ final class ControlTests: XCTestCase {
         wait(app.staticTexts["No followers yet"])
     }
 
+    func testShortPersonBiographyHasNoMoreButton() {
+        let app = launch(extra: ["-UIShortBio"])
+        app.buttons["tab-Browse"].tap()
+        poster(app, "popular-2").tap()
+        wait(app.buttons["Cam Cast, actor"]); app.buttons["Cam Cast, actor"].tap()
+        wait(app.staticTexts["A short biography."])
+        XCTAssertFalse(app.buttons["More"].exists)
+        XCTAssertTrue(app.staticTexts["42 films"].exists)
+    }
     func testCastChipOpensPersonThenFilmAndBackKeepsAccount() {
         let app = launch(); app.buttons["tab-Browse"].tap()
         poster(app, "popular-2").tap()
@@ -274,8 +329,10 @@ final class ControlTests: XCTestCase {
         wait(app.buttons["Wes Writer, writer"], 8, "crew chip with role")
         app.buttons["Cam Cast, actor"].tap()
         wait(app.navigationBars["Cam Cast"], 8, "person name header")
-        // No portrait available in the mock: no image, no fake placeholder face.
-        XCTAssertFalse(app.images["Cam Cast"].exists)
+        wait(app.staticTexts["About"])
+        wait(app.buttons["More"]); app.buttons["More"].tap()
+        wait(app.buttons["Less"]); app.buttons["Less"].tap()
+        app.swipeUp()
         wait(poster(app, "found-film")); poster(app, "found-film").tap()
         wait(app.staticTexts["Synopsis for found-film"])
         app.navigationBars.buttons.firstMatch.tap()

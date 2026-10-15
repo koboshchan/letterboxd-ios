@@ -18,6 +18,7 @@ struct ProfileScreen: View {
     private var isMember: Bool { memberUsername != nil }
     private var shownUser: String { memberUsername ?? env.username }
     @State private var tab: ProfileTab = ProfileTab.allCases[Int(AppEnvironment.arg("-UISegment") ?? "0") ?? 0]
+    @State private var pagingForward = true
     @State private var profile: ValueLoader<Profile>?
     @State private var films: PagedLoader<FilmSummary>?
     @State private var watch: PagedLoader<FilmSummary>?
@@ -32,7 +33,25 @@ struct ProfileScreen: View {
             Picker("Section", selection: $tab) { ForEach(ProfileTab.allCases) { Text($0.rawValue).tag($0) } }
                 .pickerStyle(.segmented).padding(.horizontal, 16).padding(.bottom, 8)
             content
+                .id(tab)
+                .transition(.asymmetric(insertion: .move(edge: pagingForward ? .trailing : .leading), removal: .move(edge: pagingForward ? .leading : .trailing)))
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .contentShape(Rectangle())
+                .simultaneousGesture(DragGesture(minimumDistance: 24, coordinateSpace: .local)
+                    .onEnded { value in
+                        // Reserve the leading edge for interactive navigation back.
+                        guard value.startLocation.x > 32,
+                              abs(value.translation.width) > 60,
+                              abs(value.translation.width) > abs(value.translation.height) * 1.5,
+                              let index = ProfileTab.allCases.firstIndex(of: tab) else { return }
+                        let next = index + (value.translation.width < 0 ? 1 : -1)
+                        guard ProfileTab.allCases.indices.contains(next) else { return }
+                        pagingForward = next > index
+                        withAnimation(.easeInOut(duration: 0.22)) { tab = ProfileTab.allCases[next] }
+                    })
+                .animation(.easeInOut(duration: 0.22), value: tab)
         }
+        .clipped()
         .navigationTitle(u).navigationBarTitleDisplayMode(.inline)
         .onAppear { if profile == nil { reset() } }
         .onChange(of: env.username) { _, _ in if !isMember { reset() } }
@@ -133,7 +152,13 @@ struct EntryRow: View {
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             Theme.card.frame(width: 52, height: 78)
-                .overlay { CachedImage(url: entry.posterURL) { Color.clear } }
+                .overlay {
+                    if let slug = entry.filmSlug {
+                        PosterView(film: FilmSummary(slug: slug, title: entry.filmTitle, year: entry.filmYear, posterURL: entry.posterURL))
+                    } else {
+                        CachedImage(url: entry.posterURL) { Color.clear }
+                    }
+                }
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous)).overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Theme.hairline)).shadow(color: .black.opacity(0.18), radius: 6, y: 3)
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {

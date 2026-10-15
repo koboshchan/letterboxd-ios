@@ -144,6 +144,21 @@ public enum Parsers {
         return u
     }
 
+    public static func personDetails(html: String) -> PersonDetails {
+        guard let doc = try? SwiftSoup.parse(html) else { return PersonDetails() }
+        let paragraphs = (try? doc.select(".js-tmdb-bio p").array().map { try $0.text() }) ?? []
+        let biography = paragraphs.joined(separator: "\n\n")
+        let rawCount = (try? doc.select(".smenu-subselected small").first()?.text()) ?? ""
+        let count = Int(rawCount.replacingOccurrences(of: ",", with: ""))
+        let roles = ((try? doc.select("#content-nav .smenu-menu li").array()) ?? []).compactMap { element -> String? in
+            guard let copy = try? SwiftSoup.parse(element.html()) else { return nil }
+            try? copy.select("small").remove()
+            let text = (try? copy.text()) ?? ""
+            return text.isEmpty ? nil : text
+        }
+        return PersonDetails(portraitURL: personPortrait(html: html), biography: biography.isEmpty ? nil : biography, filmCount: count, roles: Array(roles.prefix(8)))
+    }
+
     // MARK: profile
     public static func profile(html: String, username: String) throws -> Profile {
         let doc = try SwiftSoup.parse(html, "https://letterboxd.com/")

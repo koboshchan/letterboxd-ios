@@ -21,11 +21,16 @@ public protocol LetterboxdService: Sendable {
     func listFilms(list: URL, page: Int, refresh: Bool) async throws -> Page<FilmSummary>
     func filmLists(slug: String, page: Int, refresh: Bool) async throws -> Page<ListSummary>
     func personFilms(role: PersonRole, slug: String, page: Int, refresh: Bool) async throws -> Page<FilmSummary>
+    func personDetails(role: PersonRole, slug: String) async -> PersonDetails
     func personPortrait(role: PersonRole, slug: String) async -> URL?
     func poster(for slug: String) async -> URL?
 }
 
 extension LetterboxdService {
+    public func personDetails(role: PersonRole, slug: String) async -> PersonDetails {
+        PersonDetails(portraitURL: await personPortrait(role: role, slug: slug))
+    }
+
     public func diaryPage(username: String, page: Int, refresh: Bool) async throws -> Page<ActivityEntry> {
         Page(items: page == 1 ? try await diary(username: username, refresh: refresh) : [], page: page, hasNext: false)
     }
@@ -139,6 +144,11 @@ public final class PublicWebService: LetterboxdService {
     public func filmLists(slug: String, page: Int, refresh: Bool) async throws -> Page<ListSummary> {
         let s = try Validate.slug(slug)
         return try Parsers.lists(html: try await fetcher.text(url(["film", s, "lists"], page: page), forceRefresh: refresh), page: page)
+    }
+    public func personDetails(role: PersonRole, slug: String) async -> PersonDetails {
+        guard let s = try? Validate.slug(slug),
+              let html = try? await fetcher.text(url([role.rawValue, s]), forceRefresh: false) else { return PersonDetails() }
+        return Parsers.personDetails(html: html)
     }
     public func personPortrait(role: PersonRole, slug: String) async -> URL? {
         guard let s = try? Validate.slug(slug), let h = try? await fetcher.text(url([role.rawValue, s]), forceRefresh: false) else { return nil }

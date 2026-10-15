@@ -6,13 +6,18 @@ actor PosterGate {
     static let shared = PosterGate()
     private var cache: [String: URL?] = [:]
     private var active = 0
+    private var order: [String] = []
     func url(for slug: String, using s: LetterboxdService) async -> URL? {
         if let c = cache[slug] { return c }
         while active >= 2 { try? await Task.sleep(nanoseconds: 150_000_000); if Task.isCancelled { return nil } }
         if let c = cache[slug] { return c }
         active += 1; defer { active -= 1 }
         let u = await s.poster(for: slug)
-        if !Task.isCancelled { cache[slug] = .some(u) }
+        if !Task.isCancelled {
+            if cache[slug] == nil { order.append(slug) }
+            cache[slug] = .some(u)
+            while order.count > 512 { cache.removeValue(forKey: order.removeFirst()) }
+        }
         return u
     }
 }

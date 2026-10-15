@@ -71,6 +71,11 @@ final class MockService: LetterboxdService, @unchecked Sendable {
         if sc.empty { return Page(items: [], page: 1, hasNext: false) }
         return Page(items: [ListSummary(title: "Film List", url: URL(string: "https://letterboxd.com/lee/list/film-list/")!, filmCount: 5, blurb: nil)], page: 1, hasNext: false)
     }
+    func personDetails(role: PersonRole, slug: String) async -> PersonDetails {
+        PersonDetails(portraitURL: URL(string: "https://image.tmdb.org/t/p/w500/m09Y1YfPPeNYYUSHnnVqahkrC1o.jpg"),
+            biography: ProcessInfo.processInfo.arguments.contains("-UIShortBio") ? "A short biography." : Array(repeating: "An actor and filmmaker whose work spans independent films and major studio productions.", count: 12).joined(separator: " "),
+            filmCount: 42, roles: ["Actor", "Producer"])
+    }
     func personPortrait(role: PersonRole, slug: String) async -> URL? { nil }
    func following(username: String, page: Int, refresh: Bool) async throws -> Page<MemberSummary> { try network("friend", username, page) }
     func followers(username: String, page: Int, refresh: Bool) async throws -> Page<MemberSummary> { try network("fan", username, page) }
@@ -79,5 +84,8 @@ final class MockService: LetterboxdService, @unchecked Sendable {
         if page == 2 { return Page(items: [MemberSummary(username: p + "-late", displayName: p + " late", avatarURL: nil)], page: 2, hasNext: false) }
         return Page(items: (0..<14).map { MemberSummary(username: "\(p)-\($0)", displayName: "\(u == "tester" ? "" : u + " ")\(p) \($0)", avatarURL: nil) }, page: 1, hasNext: true)
     }
-    func poster(for slug: String) async -> URL? { nil }
+    func poster(for slug: String) async -> URL? {
+        guard slug == "diary-film" else { return nil }
+        return URL(string: "https://a.ltrbxd.com/resized/film-poster/5/1/5/1/8/51518-the-matrix-0-230-0-345-crop.jpg?v=fc7c366afe")
+    }
 }

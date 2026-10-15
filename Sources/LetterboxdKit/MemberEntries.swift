@@ -20,9 +20,12 @@ extension Parsers {
         return nil
     }
     private static func entryPoster(_ el: Element) throws -> URL? {
-        guard let raw = try el.select("img[src]").first()?.attr("src"),
-              let u = avatar(raw), !raw.contains("empty-poster") else { return nil }
-        return u
+        // Prefer lazy image attributes over the site's empty-poster src.
+        let candidates = [try el.attr("data-poster-url")] + (try el.select("img").array()).flatMap {
+            [try? $0.attr("data-src"), try? $0.attr("src")].compactMap { $0 }
+        }
+        return candidates.first(where: { !$0.isEmpty && !$0.contains("empty-poster") })
+            .flatMap(avatar)
     }
 
     /// Diary table rows include unreviewed viewings and repeated watches of the same film.
