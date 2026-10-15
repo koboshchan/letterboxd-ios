@@ -4,7 +4,7 @@ import LetterboxdKit
 
 /// Session lives only in the Keychain (this-device-only), never UserDefaults.
 struct KeychainSessionStore: SessionStore {
-    private let service = "com.koboshchan.letterboxdreader.session"
+    private let service = "com.kobosh.letterboxd.session"
     private var q: [String: Any] { [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service, kSecAttrAccount as String: "session"] }
     func load() throws -> Session? {
         var r: CFTypeRef?
