@@ -2,15 +2,40 @@ import XCTest
 
 /// Film detail regressions, run against the UI-test host (mock data only).
 final class FilmDetailTests: XCTestCase {
-    func open() -> XCUIApplication {
+    func open(extra: [String] = []) -> XCUIApplication {
         continueAfterFailure = false
         let app = XCUIApplication()
-        app.launchArguments = ["-Scenario", "ready", "-UIExposeBackdrop", "1"]
+        app.launchArguments = ["-Scenario", "ready", "-UIExposeBackdrop", "1"] + extra
         app.launch()
         XCTAssertTrue(app.buttons["poster-logged-1"].firstMatch.waitForExistence(timeout: 8))
         app.buttons["poster-logged-1"].firstMatch.tap()
         XCTAssertTrue(app.staticTexts["Synopsis for logged-1"].waitForExistence(timeout: 8))
         return app
+    }
+
+    func testContentRatingInlineLightAndDark() {
+        for style in ["Light", "Dark"] {
+            // Override the app preference, which may have been persisted by Settings tests.
+            let app = open(extra: ["-appearance", style.lowercased()])
+            let metadata = app.staticTexts["film-metadata"]
+            XCTAssertEqual(metadata.label, "2001 · 99 min · 14A")
+            let shot = XCTAttachment(screenshot: app.screenshot())
+            shot.name = "Film content rating " + style
+            shot.lifetime = .keepAlways
+            add(shot)
+            app.terminate()
+        }
+    }
+
+    func testMissingContentRatingLeavesNoSeparator() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-Scenario", "ready", "-UINoContentRating", "1"]
+        app.launch()
+        let poster = app.buttons["poster-logged-1"].firstMatch
+        XCTAssertTrue(poster.waitForExistence(timeout: 8)); poster.tap()
+        let metadata = app.staticTexts["film-metadata"]
+        XCTAssertTrue(metadata.waitForExistence(timeout: 8))
+        XCTAssertEqual(metadata.label, "2001 · 99 min")
     }
 
     func testBackdropFillsScreenWidthAndTop() {

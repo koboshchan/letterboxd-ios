@@ -39,6 +39,8 @@ public struct FilmDetail: Hashable, Sendable, Codable {
     public let synopsis: String?
     public let posterURL: URL?
     public let runtimeMinutes: Int?
+    /// Certification reported by Letterboxd releases, Canada preferred over USA.
+    public let contentRating: String?
     public let directors: [Person]
     public let cast: [Person]
     public let genres: [String]
@@ -48,7 +50,8 @@ public struct FilmDetail: Hashable, Sendable, Codable {
     public let backdropURL: URL?
     /// Cast and crew links from the film page (a.text-slug / a.contributor), validated, deduped.
     public var credits: [Credit] = []
-    public init(slug: String, title: String, year: Int?, tagline: String?, synopsis: String?, posterURL: URL?, runtimeMinutes: Int?, directors: [Person], cast: [Person], genres: [String], averageRating: Double?, ratingCount: Int?, backdropURL: URL? = nil, credits: [Credit] = []) {
+    public init(slug: String, title: String, year: Int?, tagline: String?, synopsis: String?, posterURL: URL?, runtimeMinutes: Int?, directors: [Person], cast: [Person], genres: [String], averageRating: Double?, ratingCount: Int?, backdropURL: URL? = nil, credits: [Credit] = [], contentRating: String? = nil) {
+        self.contentRating = contentRating
         self.credits = credits
         self.backdropURL = backdropURL
         self.slug = slug; self.title = title; self.year = year; self.tagline = tagline; self.synopsis = synopsis

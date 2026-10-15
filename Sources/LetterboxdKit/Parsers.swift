@@ -105,7 +105,26 @@ public enum Parsers {
                           posterURL: (j["image"] as? String).flatMap(URL.init(string:)).flatMap { try? Validate.url($0) },
                           runtimeMinutes: minutes, directors: people("director"), cast: people("actor"),
                           genres: (j["genre"] as? [String]) ?? [], averageRating: avg, ratingCount: cnt,
-                          backdropURL: backdrop(doc), credits: credits(html: html))
+                          backdropURL: backdrop(doc), credits: credits(html: html), contentRating: contentRating(doc))
+    }
+
+    /// The by-date Releases markup associates each badge with its own country.
+    /// Never use an unscoped badge or JSON-LD contentRating (its territory is unknown).
+    static func contentRating(_ doc: Document) -> String? {
+        var canada: String?, usa: String?, britishColumbia: String?
+        for release in (try? doc.select(".release-country")) ?? Elements() {
+            guard let country = try? release.select(".name").first()?.text(),
+                  let rating = try? release.select(".release-certification-badge .label").first()?.text(),
+                  !rating.isEmpty else { continue }
+            if country == "Canada" {
+                let note = (try? release.select(".release-note").text()) ?? ""
+                if note.localizedCaseInsensitiveContains("British Columbia") { britishColumbia = britishColumbia ?? rating }
+                canada = canada ?? rating
+            } else if country == "USA" || country == "United States" {
+                usa = usa ?? rating
+            }
+        }
+        return britishColumbia ?? canada ?? usa
     }
 
     /// Real film pages carry <div id="backdrop" data-backdrop-mobile=... data-backdrop=...>. Only https a.ltrbxd.com-style hosts pass Validate.url.

@@ -19,9 +19,17 @@ struct FilmScreen: View {
                         .shadow(color: .black.opacity(0.35), radius: 14, y: 6)
                     VStack(alignment: .leading, spacing: 6) {
                         Text(summary.title).font(Theme.serif(28, weight: .bold))
-                        if let y = summary.year { Text(String(y)).foregroundStyle(.secondary) }
+                        let detail = loader?.value
+                        let metadata = [
+                            (detail?.year ?? summary.year).map { String($0) },
+                            detail?.runtimeMinutes.map { "\($0) min" },
+                            detail?.contentRating
+                        ].compactMap { $0 }.joined(separator: " · ")
+                        if !metadata.isEmpty {
+                            Text(metadata).font(.subheadline).foregroundStyle(.secondary)
+                                .accessibilityIdentifier("film-metadata")
+                        }
                         if let d = loader?.value {
-                            if let m = d.runtimeMinutes { Text("\(m) min").font(.subheadline).foregroundStyle(.secondary) }
                             if let a = d.averageRating { Label(String(format: "%.2f", a), systemImage: "star.fill").font(.subheadline).foregroundStyle(Theme.green) }
                         }
                     }
