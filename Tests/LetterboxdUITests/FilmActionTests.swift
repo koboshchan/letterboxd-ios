@@ -29,13 +29,32 @@ final class FilmActionTests: XCTestCase {
         poster.press(forDuration: 1.0)
         XCTAssertTrue(app.buttons["menu-watchlist"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["Open Film"].exists)
-        XCTAssertFalse(app.buttons["Rate"].exists); XCTAssertFalse(app.buttons["Mark as Watched"].exists)
+        XCTAssertTrue(app.buttons["menu-watched"].exists); XCTAssertTrue(app.buttons["menu-rate"].exists)
+        XCTAssertFalse(app.buttons["Add to Diary"].exists)
         XCTAssertEqual(app.buttons["menu-watchlist"].label, "Add to Watchlist")
         app.buttons["menu-like"].tap()
         poster.tap()
         XCTAssertTrue(app.staticTexts["Synopsis for logged-1"].waitForExistence(timeout: 8))
         waitLabel(like(app), "Unlike")
         waitLabel(wl(app), "Add to Watchlist")
+    }
+
+    func testPosterMenuHalfStarThenClearKeepsWatched() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-Scenario", "ready", "-WriteMode", "ok"]
+        continueAfterFailure = false; app.launch()
+        let poster = app.buttons["poster-logged-1"].firstMatch
+        poster.press(forDuration: 1.0)
+        app.buttons["menu-rate"].tap()
+        XCTAssertTrue(app.buttons["menu-rate-0.5"].waitForExistence(timeout: 5))
+        app.buttons["menu-rate-0.5"].tap()
+        poster.tap()
+        XCTAssertTrue(app.staticTexts["Synopsis for logged-1"].waitForExistence(timeout: 8))
+        waitLabel(app.buttons["watched-button"], "Watched")
+        XCTAssertTrue(app.buttons["rating-clear"].waitForExistence(timeout: 5))
+        app.buttons["rating-clear"].tap()
+        XCTAssertTrue(app.buttons["rating-clear"].waitForNonExistence(timeout: 8))
+        waitLabel(app.buttons["watched-button"], "Watched")
     }
 
     func testBothDirectionsServerConfirmed() {
@@ -90,4 +109,25 @@ final class FilmActionTests: XCTestCase {
                       "stale result must not render as confirmed state")
         XCTAssertFalse(app.buttons["Remove from Watchlist"].exists)
     }
+
+    func testHalfStarRatingWatchedAndClear() {
+        let app = open("ok")
+        let tenth = app.buttons["rate-3.5"]
+        XCTAssertTrue(tenth.waitForExistence(timeout: 8)); tenth.tap()
+        waitLabel(app.buttons["watched-button"], "Watched")
+        XCTAssertTrue(app.buttons["rate-3.5"].isSelected || app.buttons["rate-3.5"].value != nil)
+        XCTAssertTrue(app.buttons["rating-clear"].waitForExistence(timeout: 8))
+        app.buttons["rating-clear"].tap()
+        XCTAssertTrue(app.buttons["rating-clear"].waitForNonExistence(timeout: 8))
+        waitLabel(app.buttons["watched-button"], "Watched")      // clearing a rating does not unwatch
+        app.buttons["watched-button"].tap()
+        waitLabel(app.buttons["watched-button"], "Mark as Watched")
+    }
+    func testRatingFailureShowsNoticeAndKeepsStars() {
+        let app = open("fail")
+        app.buttons["rate-5.0"].tap()
+        XCTAssertTrue(app.staticTexts[FilmActionsModelText.unconfirmed].waitForExistence(timeout: 8))
+        XCTAssertFalse(app.buttons["rating-clear"].exists)
+    }
 }
+enum FilmActionsModelText { static let unconfirmed = "Couldn’t confirm the change. Refresh to check." }

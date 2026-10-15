@@ -7,6 +7,28 @@ final class MockFilmActions: FilmActionsClient, @unchecked Sendable {
     enum Mode: String { case ok, fail, timeout, slow, logout, mismatch, loadfail }
     let mode: Mode, auth: AuthAuthority
     private let l = NSLock(); private var server = FilmState(watchlist: false, liked: false)
+    private var rs = RatingState(rating: nil, watched: false)
+    var supportsRating: Bool { true }
+    func ratingState(slug: String) async throws -> RatingState { if mode == .loadfail { throw LetterboxdError.http(status: 500) }; return l.withLock { rs } }
+    private func writeRating(_ next: RatingState) async throws -> RatingState {
+        switch mode {
+        case .fail: throw LetterboxdError.http(status: 500)
+        case .timeout: l.withLock { rs = next }; throw LetterboxdError.network("timed out")
+        case .mismatch: throw LetterboxdError.parse("rating readback mismatch")
+        case .slow: try await Task.sleep(nanoseconds: 1_500_000_000)
+        case .logout: auth.revoke()
+        default: break
+        }
+        l.withLock { rs = next }; return next
+    }
+    func setRating(slug: String, rating: Double?) async throws -> RatingState {
+        let cur = l.withLock { rs }
+        return try await writeRating(RatingState(rating: rating, watched: rating != nil ? true : cur.watched))
+    }
+    func setWatched(slug: String, watched: Bool) async throws -> RatingState {
+        let cur = l.withLock { rs }
+        return try await writeRating(RatingState(rating: cur.rating, watched: watched))
+    }
     init(mode: Mode, auth: AuthAuthority) { self.mode = mode; self.auth = auth }
     private func get() -> FilmState { l.lock(); defer { l.unlock() }; return server }
     private func set(_ s: FilmState) { l.lock(); server = s; l.unlock() }

@@ -15,6 +15,7 @@ struct HostApp: App {
         let a = ProcessInfo.processInfo.arguments
         let wm = a.firstIndex(of: "-WriteMode").flatMap { a.indices.contains($0 + 1) ? a[$0 + 1] : nil }.flatMap(MockFilmActions.Mode.init(rawValue:)) ?? .ok
         e.actions = MockFilmActions(mode: wm, auth: auth)
+        e.account = MockAccountEditing(mode: wm, auth: auth)
         e.clearCaches = { await HostCacheProbe.shared.clear() }
         let store = InMemorySessionStore()
         if sc.storedSession { try? store.save(Session(username: "tester", cookies: [WebCookie(name: "letterboxd.user.CURRENT", value: "v", domain: "letterboxd.com")])) }

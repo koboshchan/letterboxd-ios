@@ -120,7 +120,7 @@ final class FullTextPathTests: XCTestCase {
 final class CapabilityTests: XCTestCase {
     func testOnlyCapturedWritesSupported() {
         let ok = Set(WriteFeature.allCases.filter { $0.status == .supported })
-        XCTAssertEqual(ok, [.watchlist, .like])
+        XCTAssertEqual(ok, [.watchlist, .like, .watched, .rate, .createList, .editProfile])
         for f in WriteFeature.allCases where !ok.contains(f) { if case .unverified(let r) = f.status { XCTAssertFalse(r.isEmpty) } else { XCTFail() } }
     }
     func testRelationRequestIsSafeAndSameHost() async throws {

@@ -133,7 +133,7 @@ struct ExpandableText: View {
     @State private var expanded = false
     @State private var fullHeight: CGFloat = 0
     @State private var limitedHeight: CGFloat = 0
-    private var overflows: Bool { fullHeight > limitedHeight + 1 }
+    private var overflows: Bool { expanded || fullHeight > limitedHeight + 1 }
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(text).font(.body).lineSpacing(3)

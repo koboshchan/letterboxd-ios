@@ -15,11 +15,11 @@ final class AccountMenuTests: XCTestCase {
     }
     func testSignOutCancelKeepsSessionConfirmEndsIt() {
         let app = launch(); app.buttons["Account"].tap(); app.buttons["menu-sign-out"].tap()
-        XCTAssertTrue(app.buttons["confirm-sign-out"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.alerts.buttons["confirm-sign-out"].firstMatch.waitForExistence(timeout: 5))
         app.buttons["Cancel"].tap()
         XCTAssertTrue(app.buttons["Account"].exists, "cancel must leave the session intact")
         app.buttons["Account"].tap(); app.buttons["menu-sign-out"].tap()
-        app.buttons["confirm-sign-out"].tap()
+        app.alerts.buttons["confirm-sign-out"].firstMatch.tap()
         XCTAssertTrue(app.buttons["Account"].waitForNonExistence(timeout: 8))
     }
     func testSettingsAppearanceAndClearCache() {

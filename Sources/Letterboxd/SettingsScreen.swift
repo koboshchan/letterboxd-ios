@@ -37,3 +37,4 @@ struct SettingsScreen: View {
 }
 
 struct SettingsRoute: Hashable {}
+struct EditProfileRoute: Hashable {}

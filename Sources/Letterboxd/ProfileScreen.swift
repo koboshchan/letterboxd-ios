@@ -86,7 +86,7 @@ struct ProfileScreen: View {
         case .watchlist: if let l = watch { PosterGrid(loader: l, emptyTitle: "Watchlist is empty", emptyBody: "Nothing on \(shownUser)'s watchlist yet.") }
         case .diary: if let l = diary { EntryList(loader: l, emptyTitle: "Diary is empty", emptyBody: "No diary entries in the public feed. Letterboxd's RSS shows only recent entries.") }
         case .reviews: if let l = reviews { EntryList(loader: l, emptyTitle: "No reviews", emptyBody: "No written reviews in the public feed yet.") }
-        case .lists: if let l = lists { ListsView(loader: l) }
+        case .lists: if let l = lists { ListsView(loader: l, canCreate: !isMember && env.account != nil) }
         }
     }
 }
@@ -156,8 +156,14 @@ struct EntryScreen: View {
 
 struct ListsView: View {
     let loader: PagedLoader<ListSummary>
+    var canCreate = false
+    @State private var creating = false
     var body: some View {
         List {
+            if canCreate {
+                Button { creating = true } label: { Label("New List", systemImage: "plus.circle.fill").foregroundStyle(Theme.green) }
+                    .accessibilityIdentifier("new-list-button")
+            }
             ForEach(loader.items) { l in
                 NavigationLink(value: ListRoute(list: l)) {
                     VStack(alignment: .leading, spacing: 4) {
@@ -174,6 +180,7 @@ struct ListsView: View {
         .listStyle(.plain).contentMargins(.bottom, 24, for: .scrollContent)
         .refreshable { await loader.loadFirst(refresh: true) }
         .task { await loader.loadFirst() }
+        .sheet(isPresented: $creating, onDismiss: { Task { await loader.loadFirst(refresh: true) } }) { CreateListSheet() }
     }
 }
 

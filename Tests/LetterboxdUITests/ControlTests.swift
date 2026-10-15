@@ -57,7 +57,8 @@ final class ControlTests: XCTestCase {
         let app = launch()
         let acct = app.buttons["Account"]; wait(acct); acct.tap()
         wait(app.buttons["Signed in as tester"])
-        app.buttons["Sign out"].tap()
+        app.buttons["menu-sign-out"].tap()
+        wait(app.alerts.buttons["confirm-sign-out"].firstMatch); app.alerts.buttons["confirm-sign-out"].firstMatch.tap()
         wait(app.buttons["Sign in on letterboxd.com"]); XCTAssertFalse(app.otherElements["bottom-nav"].exists)
     }
     func testAccountMenuDismissKeepsSession() {
@@ -239,7 +240,11 @@ final class ControlTests: XCTestCase {
         app.buttons["count-following"].tap(); wait(app.navigationBars["Following"])
         wait(app.staticTexts["fan-1 friend 0"], 8, "list is for the viewed member")
         app.buttons["tab-Browse"].tap(); app.buttons["tab-Profile"].tap()
-        app.buttons["tab-Profile"].tap()   // re-selecting the tab pops its stack to the root
+        app.navigationBars.buttons.firstMatch.tap()   // Following back to the viewed member
+        wait(app.navigationBars["fan-1"])
+        app.navigationBars.buttons.firstMatch.tap()   // member back to Followers
+        wait(app.navigationBars["Followers"])
+        app.navigationBars.buttons.firstMatch.tap()   // Followers back to the signed-in root
         wait(app.navigationBars["tester"])
         app.buttons["Account"].tap(); wait(app.buttons["Signed in as tester"])
     }
@@ -264,7 +269,8 @@ final class ControlTests: XCTestCase {
         app.navigationBars.buttons.firstMatch.tap()
         wait(app.navigationBars["Cam Cast"])
         app.navigationBars.buttons.firstMatch.tap()
-        app.buttons["tab-Profile"].tap(); wait(app.staticTexts["Tester Person"], 8, "account unchanged")
+        app.navigationBars.buttons.firstMatch.tap()   // back to Browse root, tab bar returns
+        wait(app.buttons["tab-Profile"]); app.buttons["tab-Profile"].tap(); wait(app.staticTexts["Tester Person"], 8, "account unchanged")
     }
     func testNoCreditsFallsBackToPlainText() {
         let app = launch("empty"); app.buttons["tab-Search"].tap()

@@ -10,6 +10,19 @@ public struct HTTPResult: Sendable { public let data: Data; public let status: I
 public protocol HTTPTransport: Sendable {
     func get(_ url: URL, accept: String) async throws -> HTTPResult
     func send(_ request: WriteRequest) async throws -> HTTPResult
+    func get(_ url: URL, accept: String, credentials: RequestCredentials) async throws -> HTTPResult
+    func send(_ request: WriteRequest, credentials: RequestCredentials) async throws -> HTTPResult
+}
+
+/// Immutable originating session; never fetch a newer account's credentials during an operation.
+public struct RequestCredentials: Sendable, Equatable {
+    public let generation: Int
+    let cookie: String
+}
+extension HTTPTransport {
+    // Compatibility for injected transports that do not acquire credentials themselves.
+    public func get(_ url: URL, accept: String, credentials: RequestCredentials) async throws -> HTTPResult { try await get(url, accept: accept) }
+    public func send(_ request: WriteRequest, credentials: RequestCredentials) async throws -> HTTPResult { try await send(request) }
 }
 
 /// Redirect policy. Authenticated requests (carrying a Cookie) never follow ANY redirect, including 307/308, so
@@ -66,11 +79,17 @@ public struct URLSessionTransport: HTTPTransport {
         self.configuration = c
     }
     public func get(_ url: URL, accept: String) async throws -> HTTPResult {
+        try await get(url, accept: accept, cookie: cookieHeader?())
+    }
+    public func get(_ url: URL, accept: String, credentials: RequestCredentials) async throws -> HTTPResult {
+        try await get(url, accept: accept, cookie: credentials.cookie)
+    }
+    private func get(_ url: URL, accept: String, cookie: String?) async throws -> HTTPResult {
         var r = URLRequest(url: testSite == nil ? try Validate.url(url) : url)
         r.httpMethod = "GET"
         r.setValue(accept, forHTTPHeaderField: "Accept")
         var authenticated = false
-        if let h = cookieHeader?(), !h.isEmpty, let u = r.url, testSite.map({ $0(u) }) ?? RedirectPolicy.mayCarryCredentials(u) { r.setValue(h, forHTTPHeaderField: "Cookie"); authenticated = true }
+        if let h = cookie, !h.isEmpty, let u = r.url, testSite.map({ $0(u) }) ?? RedirectPolicy.mayCarryCredentials(u) { r.setValue(h, forHTTPHeaderField: "Cookie"); authenticated = true }
         r.setValue("LetterboxdReader/0.1 (read-only personal client; user-triggered)", forHTTPHeaderField: "User-Agent")
         do {
             let (d, resp) = try await { () async throws -> (Data, URLResponse) in
@@ -128,13 +147,29 @@ public final class AuthAuthority: @unchecked Sendable {
     private let lock = NSLock()
     private var session: Session?
     private var gen = 0
+    private var observers: [@Sendable () -> Void] = []
+    private var purgeHooks: [@Sendable () -> Void] = []
     public init() {}
+    /// Purge hooks run INSIDE the auth lock, BEFORE the new session/generation is published, so no reader can see the new
+    /// state while old private data is still reachable. Lock order is auth -> hook; a hook MUST NOT call back into this
+    /// AuthAuthority (it would deadlock). Overlapping transitions are serialized by the lock, so they cannot interleave.
+    public func addPurgeHook(_ f: @escaping @Sendable () -> Void) { lock.lock(); purgeHooks.append(f); lock.unlock() }
+    /// Username and generation read atomically, so a namespace can never be paired with another account's generation.
+    public func snapshot() -> (username: String?, generation: Int) { lock.lock(); defer { lock.unlock() }; return (session?.username, gen) }
+    public func requestCredentials(now: Date = Date()) throws -> RequestCredentials {
+        lock.lock(); defer { lock.unlock() }
+        guard let h = session?.header(now: now), !h.isEmpty else { throw AuthError.notSignedIn }
+        return RequestCredentials(generation: gen, cookie: h)
+    }
+    /// Called synchronously, inside the auth change itself, on sign-in/restore/sign-out/revoke.
+    public func onChange(_ f: @escaping @Sendable () -> Void) { lock.lock(); observers.append(f); lock.unlock() }
+    private func notify() { lock.lock(); let o = observers; lock.unlock(); o.forEach { $0() } }
     public var generation: Int { lock.lock(); defer { lock.unlock() }; return gen }
     public var username: String? { lock.lock(); defer { lock.unlock() }; return session?.username }
     /// Call only after the server confirmed this session.
-    public func setValidated(_ s: Session) { lock.lock(); session = s; gen += 1; lock.unlock() }
+    public func setValidated(_ s: Session) { lock.lock(); purgeHooks.forEach { $0() }; session = s; gen += 1; lock.unlock(); notify() }
     /// Bumps the generation only if a session was actually held (a no-op revoke must not disturb in-flight guest loads).
-    public func revoke() { lock.lock(); if session != nil { session = nil; gen += 1 }; lock.unlock() }
+    public func revoke() { lock.lock(); let had = session != nil; if had { purgeHooks.forEach { $0() }; session = nil; gen += 1 }; lock.unlock(); if had { notify() } }
     /// Cookie header or nil (nil = send no credentials). Expired cookies are never included.
     public func cookieHeader(now: Date = Date()) -> String? {
         lock.lock(); defer { lock.unlock() }
@@ -158,7 +193,7 @@ public final class Fetcher: Sendable {
         let g = auth.generation
         let ce = await cache.currentEpoch()
         if !forceRefresh, let d = await cache.get(u, partition: g) {
-            guard auth.generation == g else { throw LetterboxdError.cancelled }
+            guard await cache.currentEpoch() == ce, auth.generation == g else { throw LetterboxdError.cancelled }
             return String(decoding: d, as: UTF8.self)
         }
         let r = try await transport.get(u, accept: accept)
@@ -167,7 +202,7 @@ public final class Fetcher: Sendable {
         guard auth.generation == g else { throw LetterboxdError.cancelled }
         try BlockDetector.check(r)
         await cache.set(u, r.data, partition: g, epoch: ce)
-        guard auth.generation == g else { throw LetterboxdError.cancelled }
+        guard await cache.currentEpoch() == ce, auth.generation == g else { throw LetterboxdError.cancelled }
         return String(decoding: r.data, as: UTF8.self)
     }
 }

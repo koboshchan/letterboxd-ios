@@ -148,19 +148,23 @@ struct SignInScreen: View {
 
 struct AccountButton: ToolbarContent {
     @Environment(AccountModel.self) private var account
+    @Environment(AppEnvironment.self) private var env
     @State private var confirmSignOut = false
     var body: some ToolbarContent {
         ToolbarItem(placement: .topBarTrailing) {
             if let u = account.username {
                 Menu {
                     Text("Signed in as \(u)")
+                    if env.account != nil {
+                        NavigationLink(value: EditProfileRoute()) { Label("Edit Profile", systemImage: "person.text.rectangle") }.accessibilityIdentifier("menu-edit-profile")
+                    }
                     NavigationLink(value: SettingsRoute()) { Label("Settings", systemImage: "gearshape") }
                     // Sign out is last and asks first; the session is untouched until confirmed.
                     Button("Sign Out", systemImage: "rectangle.portrait.and.arrow.right", role: .destructive) { confirmSignOut = true }
                         .accessibilityIdentifier("menu-sign-out")
                 } label: { Image(systemName: "person.crop.circle.fill") }
                 .accessibilityLabel("Account")
-                .confirmationDialog("Sign out of Letterboxd?", isPresented: $confirmSignOut, titleVisibility: .visible) {
+                .alert("Sign out of Letterboxd?", isPresented: $confirmSignOut) {
                     Button("Sign Out", role: .destructive) { Task { await account.signOut() } }.accessibilityIdentifier("confirm-sign-out")
                     Button("Cancel", role: .cancel) {}
                 } message: { Text("You will need to sign in again to use the app.") }

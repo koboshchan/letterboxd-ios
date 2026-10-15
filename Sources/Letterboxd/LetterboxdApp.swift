@@ -17,6 +17,10 @@ final class AppEnvironment {
     let auth: AuthAuthority
     /// Watchlist/like client. Production: FilmActions. UI-test host injects a mock of the same protocol.
     var actions: FilmActionsClient? = nil
+    /// Profile edit and new-list client. Production: AccountActions. UI-test host injects a mock.
+    var account: AccountEditingClient? = nil
+    /// Drops cached reads after a confirmed write (same fence the film actions use).
+    func invalidateReads() async { await (service as? PublicWebService)?.invalidateReads() }
     /// Clears read-data and image caches. UI-test host injects a counting stub.
     var clearCaches: @MainActor () async -> Void = {}
     private var models: [String: FilmActionsModel] = [:]
@@ -27,14 +31,17 @@ final class AppEnvironment {
         if modelsGeneration != auth.generation { models = [:]; modelsGeneration = auth.generation }
         if let m = models[slug] { return m }
         if models.count >= 200 { models = [:] }
-        let m = FilmActionsModel(client: actions, auth: auth, slug: slug); m.onConfirmed = { [service] in Task { await (service as? PublicWebService)?.invalidateReads() } }; models[slug] = m; return m
+        let m = FilmActionsModel(client: actions, auth: auth, slug: slug); m.onConfirmed = { [service] in await (service as? PublicWebService)?.invalidateReads() }; models[slug] = m; return m
     }
     /// Number of pushed screens (film detail and its children) that want the bottom nav hidden; nav shows only at 0.
     var bottomNavHiders = 0
     /// Member being viewed; set only from a server-validated session (empty while signed out, never shown then).
     private(set) var username = ""
     /// The only writer: bound to the validated session (see AccountModel.onUsernameChange). No manual override exists.
-    func bind(username u: String?) { username = u ?? "" }
+    func bind(username u: String?) {
+        // Private reads are purged synchronously inside the auth transition itself (AuthAuthority purge hook).
+        username = u ?? ""
+    }
     /// Launch-argument hooks for deterministic screenshots, compiled into DEBUG builds only. They only pick a tab/segment
     /// inside the authenticated UI and cannot bypass the sign-in gate.
     static func arg(_ k: String) -> String? {
@@ -51,6 +58,7 @@ final class AppEnvironment {
         let transport = URLSessionTransport(cookieHeader: { auth.cookieHeader() })
         let e = AppEnvironment(service: PublicWebService(fetcher: Fetcher(transport: transport, auth: auth), reads: ReadStore(directory: FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?.appendingPathComponent("LetterboxdReads", isDirectory: true))), auth: auth)
         e.actions = FilmActions(transport: transport, auth: auth)
+        e.account = AccountActions(transport: transport, auth: auth)
         let svc = e.service as? PublicWebService
         e.clearCaches = { await svc?.clearCaches(); await ImagePipeline.shared.clearAll() }
         return e
@@ -187,7 +195,7 @@ struct GateScreen: View {
 
 enum Legal {
     /// Disclosures kept from the former About screen; shown on the sign-in gate.
-    static let notice = "Unofficial client, not affiliated with Letterboxd and not using its API. Pages are fetched only when you open or refresh a screen and challenges or blocks are never bypassed. Letterboxd's terms prohibit automated gathering without authorization; use at your own discretion. Watchlist and like are supported; diary, review, list and profile edits are not."
+    static let notice = "Unofficial client, not affiliated with Letterboxd and not using its API. Pages are fetched only when you open or refresh a screen and challenges or blocks are never bypassed. Letterboxd's terms prohibit automated gathering without authorization; use at your own discretion. Watchlist, like, watched, rating, bio editing and new private lists are supported; diary entries, reviews and adding films to lists are not."
 }
 
 
@@ -196,6 +204,7 @@ extension View {
     /// reached from any tab (film -> reviews -> author), so registering them on one stack leaves dead taps.
     func sharedDestinations() -> some View {
         navigationDestination(for: SettingsRoute.self) { _ in SettingsScreen() }
+            .navigationDestination(for: EditProfileRoute.self) { _ in EditProfileScreen() }
             .navigationDestination(for: NetworkRoute.self) { MemberListScreen(route: $0) }
             .navigationDestination(for: ListRoute.self) { ListDetailScreen(list: $0.list) }
             .navigationDestination(for: MemberRoute.self) { ProfileScreen(memberUsername: $0.username) }

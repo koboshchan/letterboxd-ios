@@ -30,21 +30,29 @@ public final class PublicWebService: LetterboxdService {
     let fetcher: Fetcher
     let base = URL(string: "https://letterboxd.com")!
     let reads: ReadStore?
-    public init(fetcher: Fetcher = Fetcher(), reads: ReadStore? = nil) { self.fetcher = fetcher; self.reads = reads }
+    public init(fetcher: Fetcher = Fetcher(), reads: ReadStore? = nil) { self.fetcher = fetcher; self.reads = reads
+        // Purge private reads synchronously on EVERY auth change (not via a delayed UI observer).
+        if let reads { fetcher.auth.addPurgeHook { reads.clear() } } }
     /// Read-through for the signed-in member only. Skipped when signed out or on pull-to-refresh (which still refills it).
     private func cached<T: Codable & Sendable>(_ type: T.Type, key: String, refresh: Bool, _ load: () async throws -> T) async throws -> T {
-        guard let reads, let ns = auth.username else { return try await load() }
-        let g = auth.generation, e = await reads.currentEpoch()
-        if !refresh, let v = await reads.get(T.self, ns: ns, key: key), auth.generation == g { return v }
+        let snap = auth.snapshot()
+        guard let reads, let ns = snap.username else { return try await load() }
+        let g = snap.generation, e = reads.currentEpoch()
+        func current() -> Bool { auth.snapshot().generation == g && reads.currentEpoch() == e }
+        if !refresh, let v = reads.get(T.self, ns: ns, key: key) {
+            guard current() else { throw LetterboxdError.cancelled }
+            return v
+        }
         let v = try await load()
-        guard auth.generation == g else { throw LetterboxdError.cancelled }
-        await reads.set(v, ns: ns, key: key, epoch: e)
+        guard current() else { throw LetterboxdError.cancelled }
+        reads.set(v, ns: ns, key: key, epoch: e)
+        guard current() else { throw LetterboxdError.cancelled }
         return v
     }
     /// A write happened: drop dependent reads so the next view is fresh.
-    public func invalidateReads() async { if let ns = auth.username { await reads?.invalidate(ns: ns, prefix: "") } }
+    public func invalidateReads() async { await fetcher.clearCache(); reads?.clear() }
     public var auth: AuthAuthority { fetcher.auth }
-    public func clearCaches() async { await fetcher.clearCache(); await reads?.clear() }
+    public func clearCaches() async { await fetcher.clearCache(); reads?.clear() }
 
     private func url(_ parts: [String], page: Int = 1, query: [URLQueryItem] = []) -> URL {
         var u = base
